@@ -1,0 +1,9 @@
+{
+    "code-runner.executorMap": {
+        "python": "python2 -u"
+    },
+    "files.exclude": {
+        "**/**/*.pyc": true,
+        "**/__pycache__/": true
+    }
+}
