@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+from math import atan2, sqrt, cos, sin
+import os
+import sys
+from time import time
+from datetime import datetime
+
+import rospy
+import numpy as np
+import matplotlib.pyplot as plt
+
+from helpers.lab_helpers import init_python2_plot
+from simulations.circle_simulation import CircleSimulator
+from helpers.unicycle_robot import UnicycleRobot
+
+if __name__=="__main__":    
+    print("Python version: {}".format(sys.version))
+    init_python2_plot()
+
+    """Robot setup"""
+    max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
+    robot = UnicycleRobot(
+        log_level = rospy.DEBUG,
+        max_control_velocity = max_control_velocity
+    )
+
+    """Calculate desired goal relative to the initial state"""
+    initial_heading, initial_pos, _ = robot.get_current_offaxis_state()
+    print("Initial heading: {}, initial pos: {}".format(initial_heading, initial_pos))
+    # Desired goal relative to the inital position.
+    # xrel is the distance from the inital position to the centre
+    # of the desired circle projected onto the heading vector.
+    # yrel is the component when projecting onto the heading
+    # vector rotated anti-clockwise by 90 degrees.
+    r = 1
+    xrel, yrel = (1, 1)
+    
+    angle_to_goal = initial_heading + atan2(yrel, xrel)
+    dist_to_goal = sqrt(xrel**2 + yrel**2)
+    vector_to_goal = np.array(
+        [dist_to_goal*cos(angle_to_goal), dist_to_goal*sin(angle_to_goal)]
+    )
+    goal_centre = initial_pos + vector_to_goal
+    print("Goal centre: {}".format(goal_centre))
+
+    """Simulator setup"""
+    # The maximum linear velocity from the simulation is sqrt(xdot^2 + ydot^2).
+    # Restrict xdot and ydot so that the maximum simulation velocity from
+    # simulation doesn't exceed the maximum linear robot velocity.
+    simulator = CircleSimulator(
+        goal_centre = goal_centre,
+        r = r,
+        dynamics_time_step = 1.0/robot.subscribe_freq,
+        max_velocity = max_control_velocity[0]/sqrt(2)
+    )
+    # TODO: Add delta_t (i.e. time_step) as an argument to step_simulation to make it more accurate?
+    # Ignore the first argument of step_simulation so that get_next_state()
+    # is in the form required by robot.publish_next_state()
+    get_next_state = lambda curr_pos, curr_vel: simulator.step_simulation(curr_pos, curr_vel)[1:3]
+
+    print("Finished setup")
+    start_time = time()
+
+    while not rospy.is_shutdown():
+        robot.publish_next_state(get_next_state)
+
+    total_time = time() - start_time
+    print("Experiment finished in {:.3}s. Saving data...".format(total_time))
+
+    # Save positions and velocities in case the data needs to be used later
+    dir = "outputs/{}".format(datetime.now().strftime('%Y-%m-%d %H-%M-%S'))
+    if os.path.exists('./dmca_robot'):
+        os.chdir('./dmca_robot/src')
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    
+    np.savetxt("{}/offaxis_pos.csv".format(dir), robot.offaxis_positions, delimiter=",")
+    np.savetxt("{}/control_vel.csv".format(dir), robot.control_velocities, delimiter=",")
+    
+    goal_circle = simulator.get_goal_set()
+    plt.subplots(2, 2, figsize=(6.5, 6))
+    plt.subplot(221)
+    simulator.plot_trajectories(robot.offaxis_positions)
+    # plt.title("Off-axis Robot Positions")
+    # plt.plot(robot.offaxis_positions[:, 0], robot.offaxis_positions[:, 1])
+    # plt.plot(goal_circle[:, 0], goal_circle[:, 1])
+    # plt.xlabel("$x$ (m)")
+    # plt.ylabel("$y$ (m)")
+    # plt.legend(["Trajectory", "Goal set"], loc='lower right')
+
+    times = np.linspace(0, total_time, len(robot.control_velocities[:, 0]))
+    plt.subplot(222)
+    plt.title("Linear Velocity")
+    plt.plot(times, robot.control_velocities[:, 0], lw=1)
+    plt.xlabel("Time (s)")
+    plt.ylabel("$v$ (m/s)")
+
+    plt.subplot(223)
+    plt.plot(times, robot.control_velocities[:, 1], lw=1)
+    plt.title("Angular Velocity")
+    plt.xlabel("Time (s)")
+    plt.ylabel("$\omega$ (rad/s)")
+
+    plt.subplot(224)
+    plt.plot(times, robot.headings, lw=1)
+    plt.title("Heading Angle")
+    plt.xlabel("Time (s)")
+    plt.ylabel("$\phi$ (rad)")
+
+    plt.suptitle("Unicycle Robot Circular Control with $r = {}$ and "
+        "c = ({:.2}, {:.2})".format(r, goal_centre[0], goal_centre[1]),
+        y=1.05
+    )
+    plt.tight_layout()
+    plt.savefig("{}/offaxis_robot_positions.png".format(dir), dpi=150)
+    plt.savefig("{}/offaxis_robot_positions.pdf".format(dir))
+    print("Saved figure")
