@@ -14,9 +14,14 @@ class UnicycleRobot():
     def __init__(self,
         subscribe_freq = 10,
         log_level = rospy.DEBUG,
-        max_control_velocity = (0.1, 1)
+        max_control_velocity = (0.1, 1),
+        heading_offset = 0,
+        coordinate_offset = (0, 0)
     ):
         """
+        Notes:
+            Each ros node should be configured with a unique name.
+        
         Args:
             subscribe_freq (float): How often to subscribe to the robot's
                 pose in Hz. If None, the pose is not subscribed to.
@@ -24,8 +29,20 @@ class UnicycleRobot():
                 rospy.INFO or lower will print verbose info relating to the
                 robot's state.
             max_control_velocity (tuple): Maximum value of v and omega respectively.
+            heading_offset (float): Angle in radians.
+                If the heading and coordinate offsets are zero,
+                then the measurements are in the robot's local frame of reference.
+                Non-zero values can be given to convert each state to another
+                frame of reference (i.e. the frame of the master robot in a
+                multi-robot system) each time the state is read and convert back
+                immediately prior to publishing so that when getting the current
+                state of the robot, it corresponds to the global/non-local frame.
+            coordinate offset (tuple[float, float]): See heading_offset.
         """
         self.L = 1
+        # TODO: Implement converting from local to global coordinates
+        self.heading_offset = heading_offset
+        self.coordinate_offset = np.array(coordinate_offset)
 
         # Prevents updating the control velocity more often than
         # then the pose is recorded to avoid inaccurate velocity publishes.
@@ -38,7 +55,7 @@ class UnicycleRobot():
         self.subscribe_freq = subscribe_freq
         self.max_control_velocity = max_control_velocity
 
-        rospy.init_node('controller', anonymous=True, log_level=log_level)
+        rospy.init_node('controller', anonymous=False, log_level=log_level)
         self.velocity_pub = rospy.Publisher('/RosAria/cmd_vel', Twist, queue_size=10)
         if subscribe_freq:
             self.pose_sub = rospy.Subscriber('/RosAria/pose', Odometry, self.pose_subscriber_)
