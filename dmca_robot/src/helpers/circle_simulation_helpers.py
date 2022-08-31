@@ -1,6 +1,7 @@
 """
 Constants and helper functions related to circular control simulation.
 """
+from abc import ABCMeta
 import numpy as np
 from numpy.linalg import norm
 from helpers.general_simulation_helpers import GeneralSimulationHelper
@@ -37,6 +38,8 @@ def expand_and_append(a, b):
 
 # Helpers that rely on a set of attributes
 class CircleSimulationHelper(GeneralSimulationHelper):
+    __metaclass__ = ABCMeta
+    
     def __init__(self,
         r = 2,
         goal_velocity = None,

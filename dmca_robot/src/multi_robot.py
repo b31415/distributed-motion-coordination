@@ -11,6 +11,7 @@ import os
 import sys
 from time import time
 from datetime import datetime
+import importlib
 
 import rospy
 import numpy as np
@@ -21,7 +22,8 @@ from helpers.lab_helpers import init_python2_plot
 from simulations.circle_simulation import CircleSimulator
 from helpers.unicycle_robot import UnicycleRobot
 
-if __name__=="__main__":
+def run_single_node(heading_offset, coordinate_offset, simulator, goal_args):
+    simulation_module = __import__(simulator)
     print("Python version: {}".format(sys.version))
     init_python2_plot()
 
@@ -30,43 +32,29 @@ if __name__=="__main__":
     robot = UnicycleRobot(
         log_level = rospy.WARN,
         max_control_velocity = max_control_velocity,
-        heading_offset = 0,
-        coordinate_offset = (0, 0) #TODO: Pass as argument
+        heading_offset = heading_offset,
+        coordinate_offset = coordinate_offset
     )
 
     """Calculate desired goal relative to the initial state"""
-    initial_heading, initial_pos, _ = robot.get_current_offaxis_state()
-    print("Initial heading: {}, initial pos: {}".format(initial_heading, initial_pos))
+    # TODO: Check initial heading is 0 and initial pos is (0, 0)
     
     #TODO: Refactor to use a Simulator() function in a file specified by a command-line argument
     # and that file should have a function for calculating the goal relative to the master.
     
-    # # Desired goal relative to the inital position.
-    # # xrel is the distance from the inital position to the centre
-    # # of the desired circle projected onto the heading vector.
-    # # yrel is the component when projecting onto the heading
-    # # vector rotated anti-clockwise by 90 degrees.
-    # r = 1
-    # xrel, yrel = (1, 1)
-    
-    # angle_to_goal = initial_heading + atan2(yrel, xrel)
-    # dist_to_goal = sqrt(xrel**2 + yrel**2)
-    # vector_to_goal = np.array(
-    #     [dist_to_goal*cos(angle_to_goal), dist_to_goal*sin(angle_to_goal)]
-    # )
-    # goal_centre = initial_pos + vector_to_goal
-    # print("Goal centre: {}".format(goal_centre))
+    # Desired goal relative to the inital position.
+    goal_centre = np.array((1, 1))
 
-    # """Simulator setup"""
-    # # The maximum linear velocity from the simulation is sqrt(xdot^2 + ydot^2).
-    # # Restrict xdot and ydot so that the maximum simulation velocity from
-    # # simulation doesn't exceed the maximum linear robot velocity.
-    # simulator = CircleSimulator(
-    #     goal_centre = goal_centre,
-    #     r = r,
-    #     dynamics_time_step = 1.0/robot.subscribe_freq,
-    #     max_velocity = max_control_velocity[0]/sqrt(2)
-    # )
+    """Simulator setup"""
+    # The maximum linear velocity from the simulation is sqrt(xdot^2 + ydot^2).
+    # Restrict xdot and ydot so that the maximum simulation velocity from
+    # simulation doesn't exceed the maximum linear robot velocity.
+    simulator = CircleSimulator(
+        goal_centre = goal_centre,
+        r = 1,
+        dynamics_time_step = 1.0/robot.subscribe_freq,
+        max_velocity = max_control_velocity[0]/sqrt(2)
+    )
     
     # TODO: curr_pos and curr_vel should be a list of positions and velocities respectively
     #   for a multi-robot system.

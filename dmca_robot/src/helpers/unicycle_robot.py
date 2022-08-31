@@ -1,5 +1,6 @@
 from time import time
 from math import pi
+from dmca_robot.src.helpers.lab_helpers import rotation_matrix
 
 import rospy
 from geometry_msgs.msg import Twist
@@ -40,7 +41,6 @@ class UnicycleRobot():
             coordinate offset (tuple[float, float]): See heading_offset.
         """
         self.L = 1
-        # TODO: Implement converting from local to global coordinates
         self.heading_offset = heading_offset
         self.coordinate_offset = np.array(coordinate_offset)
 
@@ -114,6 +114,12 @@ class UnicycleRobot():
             a_min = -self.max_control_velocity,
             a_max = self.max_control_velocity
         )
+        
+        # Convert velocity to the robot's local coordinate system,
+        # giving a vector with the same magnitude but different direction
+        rotate = rotation_matrix(-self.heading_offset)
+        velocity = np.matmul(rotate, velocity)
+        
         velocity_msg = velocity_control_to_twist(velocity)
         self.velocity_pub.publish(velocity_msg)
 
@@ -122,6 +128,14 @@ class UnicycleRobot():
         self.last_pose_sub_time_ = time()
         
         heading, position, velocity = extract_pose_info(pose_msg)
+        
+        # Convert from the robot's local coordinate system
+        # to the global coordinate system
+        rotate = rotation_matrix(self.heading_offset)
+        position = np.matmul(rotate, position) + self.coordinate_offset
+        velocity = np.matmul(rotate, velocity)
+        heading += self.heading_offset
+        
         rospy.loginfo_throttle(2, "Received robot state:\n"
             "\theading: {}\n"
             "\tx: {}, y: {}\n"

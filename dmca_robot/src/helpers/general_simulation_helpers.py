@@ -1,3 +1,4 @@
+from abc import ABCMeta, abstractmethod
 
 TIGHT_LEGEND_KWARGS = {
     "framealpha" : 0.3,
@@ -7,6 +8,8 @@ TIGHT_LEGEND_KWARGS = {
 }
 
 class GeneralSimulationHelper(object):
+    __metaclass__ = ABCMeta
+    
     def __init__(self,
         max_velocity = 1,
         simulation_time = 30,
@@ -22,3 +25,17 @@ class GeneralSimulationHelper(object):
         self.dynamics_time_step = dynamics_time_step
         if goal_centre is not None:
             self.goal_centre = goal_centre
+            
+    @abstractmethod
+    def step_simulation(self, *args):
+        """
+        Args:
+            *args: The current state
+        Returns:
+            The desired state for the next time-step
+        """
+        pass
+    
+    @abstractmethod
+    def get_goal(self, *args):
+        pass
