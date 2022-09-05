@@ -16,14 +16,18 @@ import importlib
 import rospy
 import numpy as np
 import matplotlib.pyplot as plt
-import argparse
 
 from helpers.lab_helpers import init_python2_plot
-from simulations.circle_simulation import CircleSimulator
 from helpers.unicycle_robot import UnicycleRobot
 
-def run_single_node(heading_offset, coordinate_offset, simulator, goal_args):
-    simulation_module = __import__(simulator)
+def run_single_node(heading_offset, coordinate_offset, full_simulator_class, goal_args):
+    """
+    Args:
+        full_simulator_class (str): In the form "<module>.<class>" relative to the
+            ./dmca_robot/src directory. E.g. "simulations.circle_simulation.CircleSimulator".
+        
+    """
+    # TODO: Check initial heading is 0 and initial pos is (0, 0)
     print("Python version: {}".format(sys.version))
     init_python2_plot()
 
@@ -36,29 +40,30 @@ def run_single_node(heading_offset, coordinate_offset, simulator, goal_args):
         coordinate_offset = coordinate_offset
     )
 
-    """Calculate desired goal relative to the initial state"""
-    # TODO: Check initial heading is 0 and initial pos is (0, 0)
-    
-    #TODO: Refactor to use a Simulator() function in a file specified by a command-line argument
-    # and that file should have a function for calculating the goal relative to the master.
+    """Simulator setup"""
+    try:
+        simulator_module, simulator_class = full_simulator_class.rsplit(".", 1)
+        SimulatorClass = getattr(importlib.import_module(simulator_module), simulator_class)
+    except Exception:
+        print("Class '{}' not found".format(full_simulator_class))
     
     # Desired goal relative to the inital position.
     goal_centre = np.array((1, 1))
-
-    """Simulator setup"""
+    
     # The maximum linear velocity from the simulation is sqrt(xdot^2 + ydot^2).
     # Restrict xdot and ydot so that the maximum simulation velocity from
     # simulation doesn't exceed the maximum linear robot velocity.
-    simulator = CircleSimulator(
+    max_velocity = max_control_velocity[0]/sqrt(2)
+    
+    simulator = SimulatorClass(
         goal_centre = goal_centre,
         r = 1,
         dynamics_time_step = 1.0/robot.subscribe_freq,
-        max_velocity = max_control_velocity[0]/sqrt(2)
+        max_velocity = max_velocity
     )
     
     # TODO: curr_pos and curr_vel should be a list of positions and velocities respectively
     #   for a multi-robot system.
-    # TODO: Ideally simulator.step_simulation should accept *args, but that is not a high priority
     # TODO: Add delta_t (i.e. time_step) as an argument to step_simulation to make it more accurate?
     # Ignore the first argument of step_simulation so that get_next_state()
     # is in the form required by robot.publish_next_state()

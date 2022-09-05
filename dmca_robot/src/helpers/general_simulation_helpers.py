@@ -1,5 +1,9 @@
 from abc import ABCMeta, abstractmethod
 
+"""
+TODO: Add run_simulation(), setup_plot(), the plot animation, 
+    FRAME_SKIP, etc. to here.
+"""
 TIGHT_LEGEND_KWARGS = {
     "framealpha" : 0.3,
     "handletextpad" : 0.4,
@@ -17,6 +21,8 @@ class GeneralSimulationHelper(object):
         goal_centre = None
     ):
         """
+        Args:
+            simulation_time (float): How many seconds to 
         Helper class containing attributes common to many
         simulations involving unicycle robots.
         """
@@ -27,15 +33,9 @@ class GeneralSimulationHelper(object):
             self.goal_centre = goal_centre
             
     @abstractmethod
-    def step_simulation(self, *args):
+    def step_simulation(self, positions, velocities):
         """
-        Args:
-            *args: The current state
         Returns:
             The desired state for the next time-step
         """
-        pass
-    
-    @abstractmethod
-    def get_goal(self, *args):
         pass

@@ -9,6 +9,8 @@ References:
         via local information exchange", International Journal of Robust and 
         Nonlinear Control, vol. 17, no. 10-11, pp. 1002-1033, 2007. 
         Available: 10.1002/rnc.1147 [Accessed 4 March 2022].
+        
+TODO: Change graph_ids to enums
 """
 import os
 import networkx as nx
@@ -19,7 +21,6 @@ GRAPH_ID = 0
 GAMMA = 1
 DYNAMICS_TIME_STEP  = 1e-4
 SIMULATION_TIME     = 10
-N_NODES = 4
 SAVE_FIG = True
 SAVE_FORMATS = ['pdf']
 TITLES = {
@@ -32,96 +33,141 @@ TITLES = {
 }
 
     
-def create_graph(graph_id: int = 4, states: list[dict] = None) -> nx.Graph:
+def create_graph(graph_id: int = 4, n_nodes = 4, states: list[dict] = None) -> nx.Graph:
     """
     Create a graph with one of the topologies in [1].
     
     Args:
-        graph_id: An index referring to which graph to create out of:
-            0: Graph with 2 separate components (fig 2 in [1])
-            1: Graph with 2 leaders (fig 4 in [1])
-            2: Connected undirected graph (fig 6 in [1])
-            3: Leader-follower graph (fig 8 in [1])
-            4: Graph with a cycle and contains a spanning tree (fig 10 in [1])
-            5: Balanced graph
-            6: Reverse of graph 4
+        graph_id (int): An index referring to which graph to create out of:
+            Topologies that require 4 nodes:
+                0: Graph with 2 separate components (fig 2 in [1])
+                1: Graph with 2 leaders (fig 4 in [1])
+                2: Connected undirected graph (fig 6 in [1])
+                3: Leader-follower graph (fig 8 in [1])
+                4: Graph with a cycle and contains a spanning tree
+                    (fig 10 in [1] which achieves consensus)
+                5: Balanced graph (average consensus)
+                6: Reverse of graph 4
+            Topologies that support any number of nodes:
+                7: Complete graph (TODO: doesn't support states != None)
+                8: One leader (node 0), N - 1 followers, giving a tree of height 1
+        n_nodes (int): Number of nodes in the graph. 
         states: Each element represents the initial states for a single node.
             The order of the list determines which node the values are assigned to.
                 
     """
-    def init_digraph_nodes() -> nx.DiGraph:
+    if graph_id <= 6 and n_nodes != 4:
+        raise ValueError("Graph ID {} requires 4 nodes, but got {} nodes".format(graph_id, n_nodes))
+    
+    if graph_id == 7 and states is not None:
+        raise ValueError("Unsupported argument combination")
+    
+    def init_digraph_nodes():
         """Create digraph with nodes and their initial states, but no edges."""
         Gd = nx.DiGraph()
         if states:
-            nodes = [(i, states[i]) for i in range(N_NODES)]
+            nodes = [(i, states[i]) for i in range(n_nodes)]
         else:
-            nodes = list(range(N_NODES))
+            nodes = list(range(n_nodes))
         Gd.add_nodes_from(nodes)
         return Gd
-        
-    def create_graph0() -> nx.DiGraph:
+    
+    # Topologies with 4 nodes
+    def create_graph0():
         Gd = init_digraph_nodes()
         Gd.add_edges_from([(1, 0), (2, 3)])
         return Gd
     
-    def create_graph1() -> nx.DiGraph:
+    def create_graph1():
         Gd = create_graph0()
         Gd.add_edge(2, 1)
         return Gd
     
-    def create_graph2() -> nx.Graph:
+    def create_graph2():
         Gd = create_graph1()
         Gu = Gd.to_undirected()
         return Gu
     
-    def create_graph3() -> nx.DiGraph:
+    def create_graph3():
         Gd = init_digraph_nodes()
         Gd.add_edges_from([(1, 0), (3, 0), (2, 1)])
         return Gd
     
-    def create_graph4() -> nx.DiGraph:
+    def create_graph4():
         Gd = create_graph3()
         Gd.add_edge(0, 2)
         return Gd
     
-    def create_graph5() -> nx.DiGraph:
+    def create_graph5():
         Gd = create_graph4()
         Gd.add_edge(0, 3)
         return Gd
     
-    def create_graph6() -> nx.DiGraph:
+    def create_graph6():
         Gd = create_graph4()
         return Gd.reverse()
-        
-    id_to_graph = [create_graph0, create_graph1, create_graph2, create_graph3, create_graph4, create_graph5, create_graph6]
+
+    # Topologies with N nodes
+    def create_graph7():
+        Gd = nx.complete_graph(n_nodes, nx.Digraph())
+        return Gd
+    
+    def create_graph8():
+        Gd = init_digraph_nodes()
+        Gd.add_edges_from([(0, node) for node in range(1, n_nodes)])
+        return Gd
+    
+    id_to_graph = [
+        create_graph0,
+        create_graph1,
+        create_graph2,
+        create_graph3,
+        create_graph4,
+        create_graph5,
+        create_graph6,
+        create_graph7,
+        create_graph8
+    ]
     
     return id_to_graph[graph_id]()
     
-def pos(node_id: int) -> float:
-    """Get the position (xi) of a node_id (i)."""
+def pos(node_id):
+    """
+    Get the position (xi) of a node_id (i).
+    Args:
+        node_id (int)
+    Returns:
+        (float)
+    """
     return positions[-1][node_id]
 
-def velocity(node_id: int) -> float:
-    """Get the velocity (zeta) of node_id (i)"""
+def velocity(node_id):
+    """
+    Get the velocity (zeta) of node_id (i)
+    Args:
+        node_id (int)
+    Returns:
+        (float)
+    """
     return velocities[-1][node_id]
 
-def u(node_id: int) -> float:
+def u(node_id):
     """
     Compute ui = -sum((pos_i - pos_j) + gamma(velocity_i - velocity_j)) 
     over neighbours (vj) of vi. I.e. protocol 4 from [1] with kij = 1.
     
     Args:
-        node_id: Index 'i' of the node to computer ui for.
+        node_id (int): Index 'i' of the node to computer ui for.
     Return:
-        Result of the protocol
+        (float) Result of the protocol
     """
     neighbours = list(G[node_id])  
     ui = sum([pos(j) + GAMMA*velocity(j) for j in neighbours]) \
         - len(neighbours) * (pos(node_id) + GAMMA*velocity(node_id))
     return ui
 
-def run_simulation() -> None:
-    for t in times:
+def run_simulation():
+    for _ in times:
         # Approximate Equation 3 in [1] using a forward difference 
         new_positions = [pos(i) + DYNAMICS_TIME_STEP*velocity(i) for i in V]
         new_velocities = [velocity(i) + DYNAMICS_TIME_STEP*u(i) for i in V]
@@ -131,7 +177,7 @@ def run_simulation() -> None:
         positions.append(new_positions)
         velocities.append(new_velocities)
 
-def plot() -> None:
+def plot():
     """Plot the positions and velocities"""
     # Setup
     ax: tuple[plt.Axes, plt.Axes]
