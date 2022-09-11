@@ -20,6 +20,8 @@ def cartesian_to_polar(cartesian):
 
 def polar_to_cartesian(polar):
     """
+    Args:
+        polar (Iterable): A point in polar coordinates
     Return:
         (np.ndarray)
     """

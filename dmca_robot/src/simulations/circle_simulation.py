@@ -85,6 +85,8 @@ class CircleSimulator(CircleSimulationHelper):
         for the circular control problem.
         Args:
             initial_position ((float, float)): Initial (x, y) coordinates
+        Returns:
+            times, positions, velocities, control_signal
         """
 
         # Setup for the simulation. Set initial conditions for the trajectories.
@@ -180,7 +182,7 @@ class CircleSimulator(CircleSimulationHelper):
         
         return pos_line
 
-    def setup_plot(self):
+    def setup_plot(self, positions, velo):
         """Plot everything except for the animated trajecories."""
         plt.subplots(1, 2, figsize=(8.5, 5))
         plt.suptitle(SUP_TITLE)
