@@ -30,15 +30,12 @@ class CircleSimulator(CircleSimulationHelper):
         super(CircleSimulator, self).__init__(**sim_args)
         self.cartesian = cartesian
 
-    def step_simulation(self, curr_pos, curr_vel, time_step=None):
+    def step_simulation(self, curr_pos, curr_vel):
         """
         Calculates one time-step of the simulation.
         Args:
             curr_pos
             curr_velocity
-            time_step (float): The estimated time between the current
-                time and the time when <new_pos> is expected to be reached.
-                Default = self.dynamics_time_step
         Returns:
             control_input (np.ndarray): For acceleration control
             new_pos (np.ndarray): On-axis cartesian position

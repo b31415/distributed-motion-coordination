@@ -39,7 +39,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from helpers.robot_formation import generate_ellipse
-from simulations.second_order_different_topologies import create_graph
+from simulations.graph_topologies import create_graph
 from helpers.circle_simulation_helpers import cartesian_to_polar
 from helpers.general_simulation_helpers import GeneralSimulationHelper
 
@@ -124,14 +124,12 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     def __init__(
         self,
         n_robots,
-        initial_positions,
         goal_positions,
         graph_id = 7,
         **sim_args
     ):
         """
         Args:
-            initial_positions (np.ndarray: shape = n_robots x 2 | Formation)
             goal_positions (np.ndarray: shape = n_robots x 2 | Formation)
             graph_id (int): Defaults to a complete graph
         """
@@ -155,12 +153,6 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         self.centre_consensus_weight = 1
 
         """Initial and goal formations"""
-        # Dimension of positions and velocities: Time x node x dim
-        if type(initial_positions) == Formation:
-            self.initial_positions = initial_positions.to_positions(n_robots)
-        else:
-            self.initial_positions = initial_positions
-        
         if type(goal_positions) == Formation:
             self.goal = goal_positions.to_positions(n_robots)
         
@@ -339,15 +331,12 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     #     new_local_centre += self.dynamics_time_step * self.centre_consensus_weight * u
     #     return new_local_centre
 
-    def step_simulation(self, curr_pos, curr_vel, time_step=None):
+    def step_simulation(self, curr_pos, curr_vel):
         """
         Calculates one time-step of the simulation.
         Args:
             curr_pos: Current robot positions
             curr_vel: Current robot velocities
-            time_step (float): The estimated time between the current
-                time and the time when <new_pos> is expected to be reached.
-                Default = self.dynamics_time_step
         Returns:
             (position, velocity, (goal_error, formation_errors, centres))
             control_input (np.ndarray): For acceleration control
@@ -379,14 +368,24 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         return new_positions, new_velocities, \
             (new_goal_errors, new_formation_errors)
     
-    def run_simulation(self):
+    def run_simulation(self, initial_positions):
         """
-        Runs step simulation repeatedly to produce values for plotting.
+        Runs step_simulation() repeatedly with unicycle
+        dynamics to produce values for plotting.
+        
+        Args:
+            initial_positions (np.ndarray: shape = n_robots x 2 | Formation)
         Returns:
             (times, positions, velocities, goal_errors, formation_errors)
         """
-        times = np.arange(0, self.simulation_time, self.dynamics_time_step)[:-1]
-        n_times = len(times)
+        if type(initial_positions) == Formation:
+            self.initial_positions = initial_positions.to_positions(self.n_robots)
+        else:
+            self.initial_positions = initial_positions
+            
+        return super().run_simulation(initial_positions)
+        
+
         
         positions = np.zeros((n_times, self.n_robots, 2))
         velocities = np.zeros((n_times, self.n_robots, 2))
