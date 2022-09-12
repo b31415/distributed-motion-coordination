@@ -34,45 +34,7 @@ expand_first = lambda value : np.expand_dims(value, 0)
 simulation_time = simulator.simulation_time
 n_iterations = int(simulation_time / simulator.dynamics_time_step)
 
-# Set initial values define the shape of the trajectory arrays
-# used to keep track of points for plotting at the end.
-curr_heading = 0
-curr_control_vel = np.array([0, 0])
-control_velocities = expand_first(curr_control_vel)
-
-curr_pos = np.array([0, 0])
-curr_vel = np.array([0, 0])
-
-positions = expand_first(curr_pos)
-
-# Run simulation
-for i in range(n_iterations):
-    curr_vel = to_cartesian_velocity(curr_heading, curr_control_vel, L)
-        
-    _, new_pos, new_vel = simulator.step_simulation(curr_pos, curr_vel)
-    
-    positions = np.concatenate(
-        (positions, expand_first(new_pos))
-    )
-
-    curr_control_vel = to_control_velocity(curr_heading, new_vel, L)
-    curr_control_vel = np.clip(
-        curr_control_vel,
-        a_min = -max_control_vel,
-        a_max = max_control_vel
-    )
-    new_heading = curr_heading + simulator.dynamics_time_step * curr_control_vel[1]
-
-    # Set the new values as the current values for the next iteration
-    curr_pos, curr_vel = new_pos, new_vel
-    curr_heading = new_heading
-    
-    # Append the new current values to the trajectories
-    control_velocities = np.concatenate(
-        (control_velocities, np.expand_dims(curr_control_vel, 0))
-    )
-    
-times = np.linspace(0, simulation_time, len(control_velocities[:, 0]))
+times, _, control_velocities, positions, *_ = simulator.run_simulation(np.array((0, 0)))
 
 # Plot
 init_python2_plot()

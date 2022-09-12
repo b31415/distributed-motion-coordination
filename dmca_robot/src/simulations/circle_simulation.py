@@ -37,9 +37,9 @@ class CircleSimulator(CircleSimulationHelper):
             curr_pos
             curr_velocity
         Returns:
-            control_input (np.ndarray): For acceleration control
             new_pos (np.ndarray): On-axis cartesian position
             new_vel (np.ndarray): On-axis cartesian velocity
+            control_input (np.ndarray): For acceleration control
         """
         get_control_input = self.get_cartesian_control_input \
             if self.cartesian else self.get_polar_control_input
@@ -74,50 +74,7 @@ class CircleSimulator(CircleSimulationHelper):
         #     if velocity_magnitude > self.max_velocity:
         #         new_velocity /= velocity_magnitude
                 
-        return control_input, new_pos, new_vel
-
-    def run_simulation(self, initial_position):
-        """
-        Calculate the position and velocity trajectories
-        for the circular control problem.
-        Args:
-            initial_position ((float, float)): Initial (x, y) coordinates
-        Returns:
-            times, positions, velocities, control_signal
-        """
-
-        # Setup for the simulation. Set initial conditions for the trajectories.
-        control_signal = np.zeros(shape=(0, 2))
-        velocities = np.array([[0, 0]])
-        positions = np.array([initial_position])
-        
-        times = np.arange(0, self.simulation_time, self.dynamics_time_step)
-        
-        # Run the simulation for each time step
-        for _ in times:
-            curr_pos = positions[-1]
-            curr_velocity = velocities[-1]
-
-            control_input, new_pos, new_velocity = self.step_simulation(curr_pos, curr_velocity)
-            positions = expand_and_append(positions, new_pos)
-            velocities = expand_and_append(velocities, new_velocity)
-            control_signal = expand_and_append(control_signal, control_input)
-
-        # Post-processing after the simulation
-        # Ignore calculation for the additional time step at the end
-        positions = positions[:-1]
-        velocities = velocities[:-1]
-
-        # if not self.cartesian:
-        #     # Convert polar coordinates to cartesian coordinates
-        #     positions = np.array([
-        #         polar_to_cartesian(pos) + self.goal_centre for pos in positions
-        #     ])
-        #     velocities = np.array([
-        #         self.polar_velocity_to_cartesian(velocity) for velocity in velocities
-        #     ])
-        
-        return times, positions, velocities, control_signal
+        return new_pos, new_vel, control_input
 
     def plot_trajectories(
         self,

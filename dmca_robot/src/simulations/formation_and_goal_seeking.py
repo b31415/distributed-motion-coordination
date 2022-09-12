@@ -10,7 +10,7 @@ only translation invariant and hence causes the formation to be
 completely reorganised when only rotation is required.
 
 Run __main__ or import functions from this file whilst in the src directory.
-I.e. python -m simulations.second_order_formation_and_goal_seeking.
+I.e. python -m simulations.formation_and_goal_seeking.
 
 Author: Mark Amos
 Date: 4/03/2022
@@ -338,7 +338,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             curr_pos: Current robot positions
             curr_vel: Current robot velocities
         Returns:
-            (position, velocity, (goal_error, formation_errors, centres))
+            (position, velocity, goal_error, formation_errors)
             control_input (np.ndarray): For acceleration control
             new_pos (np.ndarray): On-axis cartesian positions
             new_vel (np.ndarray): On-axis cartesian velocities
@@ -365,10 +365,9 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             
             # new_centres[i] = self.get_new_centre(i, delta_pos)
         
-        return new_positions, new_velocities, \
-            (new_goal_errors, new_formation_errors)
+        return new_positions, new_velocities, new_goal_errors, new_formation_errors
     
-    def run_simulation(self, initial_positions):
+    def run_simulation(self, initial_positions, *args):
         """
         Runs step_simulation() repeatedly with unicycle
         dynamics to produce values for plotting.
@@ -376,37 +375,18 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         Args:
             initial_positions (np.ndarray: shape = n_robots x 2 | Formation)
         Returns:
-            (times, positions, velocities, goal_errors, formation_errors)
+            times
+            headings
+            control_velocities
+            positions
+            velocities
+            goal_errors
+            formation_errors
         """
         if type(initial_positions) == Formation:
-            self.initial_positions = initial_positions.to_positions(self.n_robots)
-        else:
-            self.initial_positions = initial_positions
+            initial_positions = initial_positions.to_positions(self.n_robots)
             
-        return super().run_simulation(initial_positions)
-        
-
-        
-        positions = np.zeros((n_times, self.n_robots, 2))
-        velocities = np.zeros((n_times, self.n_robots, 2))
-        goal_errors = np.zeros((n_times, self.n_robots, 2))
-        formation_errors = np.zeros((n_times, self.n_robots, 3, 2))
-
-        next_pos = self.initial_positions
-        next_vel = np.zeros((self.n_robots, 2))
-        
-        for i in range(n_times):
-            curr_pos, curr_vel = next_pos, next_vel
-            
-            next_pos, next_vel, (curr_ge, curr_fe) = \
-                self.step_simulation(curr_pos, curr_vel, i)
-            
-            positions[i] = curr_pos
-            velocities[i] = curr_vel
-            goal_errors[i] = curr_ge
-            formation_errors[i] = curr_fe
-            
-        return times, positions, velocities, goal_errors, formation_errors
+        return super().run_simulation(initial_positions=initial_positions, *args)
         
     def setup_plot(self, times, positions, velocities, goal_errors, formation_errors):
         """Draw plot except for the animation."""
@@ -621,14 +601,13 @@ if __name__ == "__main__":
     
     sim = MultiRobotGoalSeeker(
         n_robots = 4,
-        initial_positions = initial_formation,
         goal_positions = goal_formation,
         graph_id = 5
     )
-    sim_results = sim.run_simulation()
+    sim_results = sim.run_simulation(initial_positions=initial_formation)
     
     # Set up data for animation
-    lines, avg_lines = sim.setup_plot(*sim_results)
+    lines, avg_lines = sim.setup_plot(sim_results[0], *sim_results[3:])
     if avg_lines:
         lines.extend(avg_lines)
     # data = np.concatenate((positions, sim.centres), axis=1)
