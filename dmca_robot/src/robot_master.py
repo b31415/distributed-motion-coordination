@@ -19,25 +19,34 @@ import matplotlib.pyplot as plt
 
 from helpers.lab_helpers import init_python2_plot
 from helpers.unicycle_robot import UnicycleRobot
-from robot_node import RosNode
 
-class RosMaster(RosNode):
+class RosMaster:
     def __init__(self):
-        super(RosNode, self).__init__()
+        """
+        Save params
+        """
+        self.goal_positions = np.array(rospy.get_params("~goal_positions"))
+        full_simulator_class = rospy.get_param("~simulator_class")
+        
+        # Convert simulator_class from a string to a class
+        try:
+            simulator_module, simulator_class = full_simulator_class.rsplit(".", 1)
+            self.SimulatorClass = getattr(importlib.import_module(simulator_module), simulator_class)
+        except Exception:
+            print("Class '{}' not found".format(full_simulator_class))
     
-    def run(self, goal_args):
+    
+    def run(self):
         """
         Args:
             full_simulator_class (str): In the form "<module>.<class>" relative to the
                 ./dmca_robot/src directory. E.g. "simulations.circle_simulation.CircleSimulator".
             
         """
-        super().run()
         
         # TODO: Check initial heading is 0 and initial pos is (0, 0)
         print("Python version: {}".format(sys.version))
         init_python2_plot()
-
 
         """Simulator setup"""
         # Desired goal relative to the inital position.
@@ -49,7 +58,7 @@ class RosMaster(RosNode):
         max_velocity = self.max_control_velocity[0]/sqrt(2)
         
         simulator = self.SimulatorClass(
-            goal_positions = goal_positions,
+            goal_positions = self.goal_positions,
             r = 1,
             dynamics_time_step = 1.0/self.robot.subscribe_freq,
             max_velocity = max_velocity
@@ -58,14 +67,13 @@ class RosMaster(RosNode):
         # TODO: curr_pos and curr_vel should be a list of positions and velocities respectively
         #   for a multi-robot system.
         # TODO: Add delta_t (i.e. time_step) as an argument to step_simulation to make it more accurate?
-        # Ignore the first argument of step_simulation so that get_next_state()
-        # is in the form required by robot.publish_next_state()
-        get_next_state = lambda curr_pos, curr_vel: simulator.step_simulation(curr_pos, curr_vel)[1:3]
+        get_next_state = lambda curr_pos, curr_vel: simulator.step_simulation(curr_pos, curr_vel)[:2]
 
         print("Finished setup")
         start_time = time()
 
         while not rospy.is_shutdown():
+            #TODO: Publish results to each robot
             self.robot.publish_next_state(get_next_state)
 
         total_time = time() - start_time

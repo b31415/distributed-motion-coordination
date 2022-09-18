@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
+from abc import ABCMeta
 
 import os
 from time import sleep
@@ -8,19 +9,18 @@ import argparse
 from fabric import ThreadingGroup as Group
 import patchwork.transfers
 
-def connect_robots(robot_params, server_package_path, simulation_class):
+def connect_robots(master_params, robot_params, server_package_path):
     """
     Preconditions:
         Assumes the path '~/catkin_ws/src/dmca_robot' exists on each robot.
         Assumes bringup_pioneer is already running on each of the robots.
     Args:
-        args: From parser.parse_args()
         robot_params (list[RobotParams])
     """
-    names = [r.name for r in robot_params]
+    names = master_params.robot_names
     # Iterate through the list of robots to find
     # the master's name, terminating early once found
-    master = next((r.name for r in robot_params if r.is_master), None)
+    master = master_params.master
     ros_master_uri = "http://{}:11311".format(master)
 
     with Group(*names) as robots:
@@ -74,11 +74,15 @@ def connect_robots(robot_params, server_package_path, simulation_class):
 
         print("Running {}".format(file_name))
         # try:
+        
+        command = "cd ~/catkin_ws && " \
+            "source ~/catkin_ws/devel/setup.bash && " \
+            "rosrun dmca_robot"
+            
         for robot in robots:
             if robot.original_host == master:
                 file_name = "robot_master.py"
-            else:
-                file_name = "robot_node.py"
+                robot.run("{} robot_master.py {} &".format(command, str(master_params)))
 
             # Get the params for the current robot
             params = next(
@@ -87,11 +91,9 @@ def connect_robots(robot_params, server_package_path, simulation_class):
             
             # Run the robot
             robot.run(
-                "cd ~/catkin_ws && "
-                "source ~/catkin_ws/devel/setup.bash && "
-                "rosrun dmca_robot {} _simulation_class:={} "
+                "{} robot_node.py _id:={} _simulation_class:={} "
                 "{} > ./src/output.log".format(
-                    file_name, simulation_class, str(params)
+                    command, file_name, simulation_class, str(params)
                 )
             )
         # except Exception as e:
@@ -101,41 +103,72 @@ def connect_robots(robot_params, server_package_path, simulation_class):
 
         sleep(5)
 
-class RobotParams:
-    def __init__(self, name, position=(0, 0), heading=0, is_master=False):
-        """
-        Attributes:
-            name (str): Host name of the robot.
-            position ((float, float)): Position relative to the ros
-                master's coordinate system where the x-axis is given
-                by the master's heading.
-            heading (float): Heading relative to the ros master.
-            is_master (bool): Whether the robot is the ros master.
-        """
-        self.name = name
-        self.position = position
-        self.heading = heading
-        self.is_master = is_master
+class Params(object):
+    __metaclass__ = ABCMeta
     
     def __str__(self):
         params = ''
         for key, value in self.__dict__.items():
-            params += '_{}:={} '.format(key, value)
+            params += '_{}:="{}" '.format(key, value)
 
         return params.strip()
-           
+
+class RobotParams(Params):
+    def __init__(self, name, initial_position=(0, 0), heading=0):
+        """
+        Attributes:
+            name (str): Host name of the robot.
+            initial_position ((float, float)): Position relative to the ros
+                master's coordinate system where the x-axis is given
+                by the master's heading.
+            heading (float): Heading relative to the ros master.
+        """
+        self.name = name
+        self.initial_position = initial_position
+        self.heading = heading
+    
+class MasterParams(Params):
+    def __init__(self, goal_positions, simulation_class, master, robot_names):
+        """
+        Args:
+            goal_positions (list): Coordinates of the robot goals in the master's
+                coordinate system. The order of elements in the list should
+                be the same as the list of RobotParams.
+        """
+        self.goal_positions = goal_positions
+        self.simulation_class = simulation_class
+        self.master = master
+        self.robot_names = robot_names
+
 if __name__ == "__main__":
     
+    simulation_class = "simulations.formation_and_goal_seeking.MultiRobotGoalSeeker"
+    
+    """
+        Lowercase robot initials for initial
+        positions and uppercase for goals:
+         -------
+        |L      |
+        |D      |
+        |  d l  |
+         -------
+    """
+    
     robot_params = [
-        RobotParams('donnie', master=True),
-        RobotParams('leonardo', position=(0, -1), heading=0) # To the right of Donnie
+        RobotParams('donnie'),
+        RobotParams('leonardo', initial_position=(0, -1), heading=0)
     ]
+    master_params = MasterParams(
+        goal_positions = [(1, 1), (2, 1)],
+        simulation_class = simulation_class,
+        master = "donnie",
+        robot_names = [r.name for r in robot_params]
+    )
     
     # The path of the directory on the server (computer running this
     # script) that should be copied/synced to each robot. If None, directories
     # are left as is without syncing.
     server_package_path = None
 
-    simulation_class = "simulations.formation_and_goal_seeking.MultiRobotGoalSeeker"
     
-    connect_robots(robot_params, server_package_path, simulation_class)
+    connect_robots(master_params, robot_params, server_package_path)

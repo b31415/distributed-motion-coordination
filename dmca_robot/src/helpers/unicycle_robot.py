@@ -13,6 +13,7 @@ from helpers.ros_helpers import extract_pose_info, velocity_control_to_twist
 
 class UnicycleRobot:
     def __init__(self,
+        node_name = 'controller',
         subscribe_freq = 10,
         log_level = rospy.DEBUG,
         max_control_velocity = (0.1, 1),
@@ -24,6 +25,8 @@ class UnicycleRobot:
             Each ros node should be configured with a unique name.
         
         Args:
+            node_name (str): Name used for referring to the current robot.
+                Required for multi-agent systems.
             subscribe_freq (float): How often to subscribe to the robot's
                 pose in Hz. If None, the pose is not subscribed to.
             log_level (Constant): The minimum severity of messages to log.
@@ -55,7 +58,7 @@ class UnicycleRobot:
         self.subscribe_freq = subscribe_freq
         self.max_control_velocity = max_control_velocity
 
-        rospy.init_node('controller', anonymous=False, log_level=log_level)
+        rospy.init_node(node_name, anonymous=False, log_level=log_level)
         self.velocity_pub = rospy.Publisher('/RosAria/cmd_vel', Twist, queue_size=10)
         if subscribe_freq:
             self.pose_sub = rospy.Subscriber('/RosAria/pose', Odometry, self.pose_subscriber_)

@@ -24,21 +24,17 @@ from robot_master import RosMaster
 class RosNode:
     def __init__(self):
         self.name = rospy.get_param("~name")
-        self.position = rospy.get_param("~position")
-        self.heading = rospy.get_param("heading")
-        try:
-            simulator_module, simulator_class = simulator_class.rsplit(".", 1)
-            self.SimulatorClass = getattr(importlib.import_module(simulator_module), simulator_class)
-        except Exception:
-            print("Class '{}' not found".formatfull_simulator_class))
-        
+        self.initial_position = rospy.get_param("~initial_position")
+        self.heading = rospy.get_param("~heading")
+
         """Robot setup"""
         self.max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
         self.robot = UnicycleRobot(
+            node_name = self.name,
             log_level = rospy.WARN,
             max_control_velocity = self.max_control_velocity,
             heading_offset = self.heading,
-            coordinate_offset = self.position
+            coordinate_offset = self.initial_position
         )
 
     def run(self):
