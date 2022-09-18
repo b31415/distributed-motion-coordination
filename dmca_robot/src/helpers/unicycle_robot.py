@@ -11,7 +11,7 @@ from helpers.lab_helpers import to_cartesian_velocity, \
     to_offaxis, to_control_velocity
 from helpers.ros_helpers import extract_pose_info, velocity_control_to_twist
 
-class UnicycleRobot():
+class UnicycleRobot:
     def __init__(self,
         subscribe_freq = 10,
         log_level = rospy.DEBUG,

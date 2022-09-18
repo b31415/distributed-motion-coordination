@@ -87,7 +87,7 @@ def get_bounding_box(arrays):
     x_values = [i[:, 0] for i in arrays if good_array_values(i)]
     y_values = [i[:, 1] for i in arrays if good_array_values(i)]
     x_min = np.floor(np.min(x_values)) - 1
-    x_max = np.ceil(np.max(x_values))
+    x_max = np.ceil(np.max(x_values)) + 1
     y_min = np.floor(np.min(y_values)) - 1
     y_max = np.ceil(np.max(y_values)) + 1
     return (x_min, x_max), (y_min, y_max)
@@ -96,7 +96,7 @@ class FormationType(Enum):
     GOAL        = "Goal"
     IDEAL_POLAR = "Ideal Polar"
 
-class Formation():
+class Formation:
     def __init__(self, centre, angle, radius, y_axis_radius = None):
         """
         Collection of attributes describing an ellipse or circle.
@@ -135,8 +135,8 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """
         # super(GeneralSimulationHelper, self).__init__(**sim_args)
         super().__init__(**sim_args)
+        self.graph = create_graph(graph_id, n_robots)
         self.n_robots = n_robots
-        self.graph = create_graph(graph_id)
         
         # Only plot every <FRAME_SKIP>th frame for the animation
         self.frame_skip = 5
@@ -418,14 +418,14 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         x_coords = positions[:, :, 0]
         y_coords = positions[:, :, 1]
         x_goal, y_goal = list(zip(*self.goal))
-        COLOURS = ["r", "b", "k", "m"]
+        COLOURS = ["k", "r", "b", "m", "g"][:self.n_robots]
         
         for id, colour in enumerate(COLOURS):
             # Create lines with no points to be used for the animation 
             pos_lines.extend(plt.plot([], [], f'{colour}', linewidth=1))
             
             # Plot a complete, thin version of the trajectories to be animated
-            plt.plot(x_coords[:, id], y_coords[:, id], f'{colour}:', linewidth=0.4)
+            plt.plot(x_coords[:, id], y_coords[:, id], f'{colour}', linewidth=1)
             
             # Plot markers for start, actual end and desired end points respectively
             start_markers.extend(plt.plot(x_coords[0, id], 
@@ -441,7 +441,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         labels = ["robot {}".format(i + 1) for i in range(self.n_robots)]
         labels.extend(["start", "end", "goal"])
         handles.extend(pos_lines)
-        handles.extend([start_markers[2], end_markers[2], goal_markers[2]])
+        handles.extend([start_markers[0], end_markers[0], goal_markers[0]])
         
         """Plot the internal average consensus values of each robot"""
         avg_lines = None
@@ -586,23 +586,30 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     
 if __name__ == "__main__":
     
-    test_case = "reproduce paper results"
+    test_case = "reproduce paper"
     initial_formation = Formation((0, 0), 0, 1)
+    n_robots = 4
     
     if test_case == "ellipse":
         goal_formation = Formation((0, 0), 0, 0.75, 1.5)
     elif test_case == "rotate on spot":
         goal_formation = Formation((0, 0), np.pi/2, 1)
-    elif test_case == "reproduce paper results":
+    elif test_case == "reproduce paper":
         initial_formation = Formation((5, 0), np.deg2rad(135), 2)
         goal_formation = Formation((0, 4), np.deg2rad(280), 2)
     else:
         raise Exception("Unknown formation scenario")
     
+    if n_robots == 4:
+        graph_id = 4 # Spanning tree
+    else:
+        graph_id = 7 # Complete graph
+    
     sim = MultiRobotGoalSeeker(
-        n_robots = 4,
+        n_robots = n_robots,
         goal_positions = goal_formation,
-        graph_id = 5
+        graph_id = graph_id,
+        dynamics_time_step = 0.1
     )
     sim_results = sim.run_simulation(initial_positions=initial_formation)
     

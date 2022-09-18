@@ -9,8 +9,9 @@
             "type": "python",
             "request": "launch",
             "cwd": "${workspaceFolder}/dmca_robot/src/",
-            "module": "simulations.formation_and_goal_seeking",
-            // "module": "simulations.circle_sim",
+            // "module": "simulations.formation_and_goal_seeking",
+            // "module": "circle_sim",
+            "module": "simulations.circle_simulation",
             "console": "integratedTerminal",
             "justMyCode": true
         }

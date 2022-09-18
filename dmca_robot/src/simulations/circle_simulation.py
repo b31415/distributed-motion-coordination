@@ -136,7 +136,7 @@ class CircleSimulator(CircleSimulationHelper):
         
         return pos_line
 
-    def setup_plot(self, positions, velo):
+    def setup_plot(self, times, positions, velocities):
         """Plot everything except for the animated trajecories."""
         plt.subplots(1, 2, figsize=(8.5, 5))
         plt.suptitle(SUP_TITLE)
@@ -199,10 +199,10 @@ class CircleSimulator(CircleSimulationHelper):
     
 if __name__ == "__main__":
     simulator = CircleSimulator()
-    times, positions, velocities, control_signal = simulator.run_simulation((0, 0))
+    times, _, _, positions, velocities, control_signal = simulator.run_simulation((0, 0))
     
     # Plot and animate the simulation results
-    line = simulator.setup_plot()
+    line = simulator.setup_plot(times, positions, velocities)
     
     anim = animation.FuncAnimation(
         fig         = plt.gcf(),

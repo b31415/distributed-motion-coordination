@@ -8,18 +8,20 @@ import argparse
 from fabric import ThreadingGroup as Group
 import patchwork.transfers
 
-def connect_robots(args):
+def connect_robots(robot_params, server_package_path, simulation_class):
     """
     Preconditions:
         Assumes the path '~/catkin_ws/src/dmca_robot' exists on each robot.
         Assumes bringup_pioneer is already running on each of the robots.
     Args:
         args: From parser.parse_args()
+        robot_params (list[RobotParams])
     """
-    names = args.robots
-    file_name = args.file_name
-    server_package_path = args.server_package_path
-    ros_master_uri = "http://{}:11311".format(args.ros_master)
+    names = [r.name for r in robot_params]
+    # Iterate through the list of robots to find
+    # the master's name, terminating early once found
+    master = next((r.name for r in robot_params if r.is_master), None)
+    ros_master_uri = "http://{}:11311".format(master)
 
     with Group(*names) as robots:
         
@@ -72,10 +74,26 @@ def connect_robots(args):
 
         print("Running {}".format(file_name))
         # try:
-        robots.run(
-            "cd ~/catkin_ws && "
-            "source ~/catkin_ws/devel/setup.bash && "
-            "rosrun dmca_robot {} > ./src/output.log".format(file_name))
+        for robot in robots:
+            if robot.original_host == master:
+                file_name = "robot_master.py"
+            else:
+                file_name = "robot_node.py"
+
+            # Get the params for the current robot
+            params = next(
+                (r for r in robot_params if robot.original_host == r.name), None
+            )
+            
+            # Run the robot
+            robot.run(
+                "cd ~/catkin_ws && "
+                "source ~/catkin_ws/devel/setup.bash && "
+                "rosrun dmca_robot {} _simulation_class:={} "
+                "{} > ./src/output.log".format(
+                    file_name, simulation_class, str(params)
+                )
+            )
         # except Exception as e:
         #     failed_robots = [r.host for r in e.result.failed.keys()]
         #     print("{} failed on robots: {}".format(file_name, failed_robots))
@@ -83,15 +101,41 @@ def connect_robots(args):
 
         sleep(5)
 
+class RobotParams:
+    def __init__(self, name, position=(0, 0), heading=0, is_master=False):
+        """
+        Attributes:
+            name (str): Host name of the robot.
+            position ((float, float)): Position relative to the ros
+                master's coordinate system where the x-axis is given
+                by the master's heading.
+            heading (float): Heading relative to the ros master.
+            is_master (bool): Whether the robot is the ros master.
+        """
+        self.name = name
+        self.position = position
+        self.heading = heading
+        self.is_master = is_master
+    
+    def __str__(self):
+        params = ''
+        for key, value in self.__dict__.items():
+            params += '_{}:={} '.format(key, value)
+
+        return params.strip()
+           
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--file-name", required=True, help="The name of "
-        "a python script in the ~/.../<package>/src directory.")
-    parser.add_argument("--robots", nargs='+', default=['donnie', 'leonardo'],
-        help="The names of the robots to use.")
-    parser.add_argument("--ros-master", default="donnie")
-    parser.add_argument("--server-package-path", default=None, help="The path of the directory on the "
-        "server (computer running this script) that should be copied/synced to each robot. "
-        "If None, directories are left as is without syncing.")
-    args = parser.parse_args()
-    connect_robots(args)
+    
+    robot_params = [
+        RobotParams('donnie', master=True),
+        RobotParams('leonardo', position=(0, -1), heading=0) # To the right of Donnie
+    ]
+    
+    # The path of the directory on the server (computer running this
+    # script) that should be copied/synced to each robot. If None, directories
+    # are left as is without syncing.
+    server_package_path = None
+
+    simulation_class = "simulations.formation_and_goal_seeking.MultiRobotGoalSeeker"
+    
+    connect_robots(robot_params, server_package_path, simulation_class)

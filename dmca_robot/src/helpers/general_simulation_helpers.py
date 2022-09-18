@@ -54,7 +54,7 @@ class GeneralSimulationHelper(object):
     def run_simulation(self, initial_positions, max_control_velocity=None):
         """
         Args:
-            initial_positions (np.ndarray)
+            initial_positions (Iterable)
             max_control_velocity (Optional[Iterable]: length = 2): In the
                 form (v, omega). If None, the control velocity won't be
                 saturated (clipping may still be applied before converting
@@ -75,6 +75,7 @@ class GeneralSimulationHelper(object):
         n_times = len(times)
         
         # Initial values
+        initial_positions = np.array(initial_positions)
         multi_robot = (len(initial_positions.shape) == 2)
         if multi_robot:
             n_robots = initial_positions.shape[0]
@@ -94,7 +95,6 @@ class GeneralSimulationHelper(object):
         
         for curr_time in range(n_times):
             # Calculate the next state
-            #BUG: Array of ndarrays instead of big ndarray
             curr_vel = to_cartesian_velocity(curr_heading, curr_control_vel, self.L)
             
             other_values = self.step_simulation(curr_pos, curr_vel)
@@ -107,7 +107,7 @@ class GeneralSimulationHelper(object):
                     a_min = -max_control_velocity,
                     a_max = max_control_velocity
                 )
-            new_heading = curr_heading + self.dynamics_time_step * new_control_vel[1]
+            new_heading = curr_heading + self.dynamics_time_step * new_control_vel[..., 1]
             
             # Save the current values
             state = (curr_heading, curr_control_vel, curr_pos, curr_vel, *other_values[2:])

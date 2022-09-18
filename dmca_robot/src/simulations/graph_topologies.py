@@ -109,7 +109,7 @@ def create_graph(graph_id: int = 4, n_nodes = 4, states: list[dict] = None) -> n
 
     # Topologies with N nodes
     def create_graph7():
-        Gd = nx.complete_graph(n_nodes, nx.Digraph())
+        Gd = nx.complete_graph(n_nodes)
         return Gd
     
     def create_graph8():
