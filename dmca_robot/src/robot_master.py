@@ -6,6 +6,7 @@ Similar to circle_lab.py but used on each node in a multi-robot system.
 # TODO: Refactor so that this file works with a single robot as well as
 #   multiple robots to replace circle_lab.py instead of duplicating it.
 """
+import argparse
 from math import atan2, sqrt, cos, sin
 import os
 import sys
@@ -21,12 +22,12 @@ from helpers.lab_helpers import init_python2_plot
 from helpers.unicycle_robot import UnicycleRobot
 
 class RosMaster:
-    def __init__(self):
+    def __init__(self, args):
         """
         Save params
         """
-        self.goal_positions = np.array(rospy.get_params("~goal_positions"))
-        full_simulator_class = rospy.get_param("~simulator_class")
+        self.sim_args = dict(args.simulator_args)
+        full_simulator_class = args.simulator_class
         
         # Convert simulator_class from a string to a class
         try:
@@ -57,9 +58,10 @@ class RosMaster:
         # simulation doesn't exceed the maximum linear robot velocity.
         max_velocity = self.max_control_velocity[0]/sqrt(2)
         
+        r = 1
         simulator = self.SimulatorClass(
-            goal_positions = self.goal_positions,
-            r = 1,
+            goal_centre = self.sim_args.goal_positions,
+            r = r,
             dynamics_time_step = 1.0/self.robot.subscribe_freq,
             max_velocity = max_velocity
         )
@@ -73,8 +75,9 @@ class RosMaster:
         start_time = time()
 
         while not rospy.is_shutdown():
+            print("State: " + str(get_next_state()))
             #TODO: Publish results to each robot
-            self.robot.publish_next_state(get_next_state)
+            #self.robot.publish_next_state(get_next_state)
 
         total_time = time() - start_time
         print("Experiment finished in {:.3}s. Saving data...".format(total_time))
@@ -128,5 +131,14 @@ class RosMaster:
         print("Saved figure")
     
 if __name__ == "__main__":
-    node_name = rospy.get_param('~node_name')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--master_name")
+    parser.add_argument("--goal_positions")
+    parser.add_argument("--simulator_class")
+    parser.add_argument("--node_names")
+    args = parser.parse_args()
+    print("Master args:\n" + args)
+
+    master = RosMaster()
+    master.run()
     

@@ -18,7 +18,7 @@ class CircleSimulator(CircleSimulationHelper):
         """
         Args:
             cartesian (bool): Default = false
-            r (float): Radius. Default = 2
+            r (float): Radius. Default = 1
             goal_velocity (float): Default = 0.8 x max_velocity
             goal_centre (np.ndarray): Default = [3, 4]
             goal_angular_velocity: Default = goal_velocity / r. How fast

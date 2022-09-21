@@ -4,7 +4,6 @@ from abc import ABCMeta
 
 import os
 from time import sleep
-import argparse
 
 from fabric import ThreadingGroup as Group
 import patchwork.transfers
@@ -13,15 +12,18 @@ def connect_robots(master_params, robot_params, server_package_path):
     """
     Preconditions:
         Assumes the path '~/catkin_ws/src/dmca_robot' exists on each robot.
-        Assumes bringup_pioneer is already running on each of the robots.
+        Assumes anon_bringup is already running on each of the robots.
     Args:
         robot_params (list[RobotParams])
     """
-    names = master_params.robot_names
+    names = master_params.node_names
     # Iterate through the list of robots to find
     # the master's name, terminating early once found
-    master = master_params.master
+    master = master_params.master_name
     ros_master_uri = "http://{}:11311".format(master)
+    catkin_dir = "~/catkin_ws"
+    node_file = "robot_node.py"
+    master_file = "robot_master.py"
 
     with Group(*names) as robots:
         
@@ -35,11 +37,9 @@ def connect_robots(master_params, robot_params, server_package_path):
         print("Connected to all robots: {}".format(names))
 
         # Sync the files in <server_package_path> with each robot
-        package_path = "~/catkin_ws/src/"
+        package_path = os.path.join(catkin_dir, "src/dmca_robot/")
         
         if server_package_path is not None:
-            package_name = server_package_path.rsplit('/')[-1]
-            file_path = os.path.join(package_path, package_name, "src", file_name)
             print("Syncing files...\r", end="")
             for connection in robots:
                 patchwork.transfers.rsync(
@@ -47,42 +47,45 @@ def connect_robots(master_params, robot_params, server_package_path):
                     server_package_path,
                     package_path,
                     exclude=('outputs/'),
-                    delete=True
+                    delete=False
                 )
             print("Finished syncing files")
             
-        else:
-            file_path = os.path.join("~/catkin/src/dmca_robot", file_name)
 
         # TODO: Make this line work
-        robots.run("export ROS_MASTER_URI={} && bringup_pioneer &".format(ros_master_uri), disown=True)
+        robots.run("export ROS_MASTER_URI={} && anon_bringup &".format(ros_master_uri), disown=True)
 
         # Build the package
         try:
             # Try build just the required package
             print("Attempting to build package")
-            robots.run('cd ~/catkin_ws && catkin build dmca_robot')
+            robots.run("cd {} && catkin build dmca_robot".format(catkin_dir))
         except Exception as e:
             # Build everything from scratch
             for connection in list(e.result.failed.keys()):
                 print("Couldn't build package so rebuilding everything for {}".format(connection.host))
-                connection.run('rm -r ~/catkin_ws/devel/ ~/catkin_ws/build/')
-                connection.run('cd ~/catkin_ws && catkin build')
+                connection.run('rm -r {} {}'.format(
+                    os.path.join(catkin_dir, "devel"),
+                    os.path.join(catkin_dir, "build")
+                ))
+                connection.run("cd {} && catkin build".format(catkin_dir))
 
         # Make sure the file is executable
-        robots.run('chmod +x {}'.format(file_path))
+        dir_path = os.path.join(catkin_dir, "src/dmca_robot/src/")
+        for file in [node_file, master_file]:
+            robots.run('chmod +x {}'.format(os.path.join(dir_path, file)))
 
-        print("Running {}".format(file_name))
-        # try:
+        command = "cd {} && source {} && " \
+            "rosrun dmca_robot".format(
+            os.path.join(catkin_dir, "src/dmca_robot/src/"), 
+            os.path.join(catkin_dir, "devel/setup.bash")
+        )
         
-        command = "cd ~/catkin_ws && " \
-            "source ~/catkin_ws/devel/setup.bash && " \
-            "rosrun dmca_robot"
-            
-        for robot in robots:
+        print("Running nodes:")
+        for id, robot in enumerate(robots):
             if robot.original_host == master:
-                file_name = "robot_master.py"
-                robot.run("{} robot_master.py {} &".format(command, str(master_params)))
+                print("\tRunning master script on {}".format(master))
+                robot.run("{} robot_master.py {} > output.log".format(command, str(master_params)))
 
             # Get the params for the current robot
             params = next(
@@ -90,10 +93,11 @@ def connect_robots(master_params, robot_params, server_package_path):
             )
             
             # Run the robot
+            print("\tRunning {}".format(robot.original_host))
             robot.run(
-                "{} robot_node.py _id:={} _simulation_class:={} "
-                "{} > ./src/output.log".format(
-                    command, file_name, simulation_class, str(params)
+                "{} robot_node.py --id {} "
+                "{} >> output.log".format(
+                    command, id, str(params)
                 )
             )
         # except Exception as e:
@@ -109,7 +113,7 @@ class Params(object):
     def __str__(self):
         params = ''
         for key, value in self.__dict__.items():
-            params += '_{}:="{}" '.format(key, value)
+            params += '--{} "{}" '.format(key, value)
 
         return params.strip()
 
@@ -128,22 +132,24 @@ class RobotParams(Params):
         self.heading = heading
     
 class MasterParams(Params):
-    def __init__(self, goal_positions, simulation_class, master, robot_names):
+    def __init__(self, simulator_args, simulation_class, master_name, node_names):
         """
         Args:
+            simulator_args (str): A dictionary containing all
+                the args for the simulator.
             goal_positions (list): Coordinates of the robot goals in the master's
                 coordinate system. The order of elements in the list should
                 be the same as the list of RobotParams.
         """
-        self.goal_positions = goal_positions
+        self.simulator_args = simulator_args
         self.simulation_class = simulation_class
-        self.master = master
-        self.robot_names = robot_names
+        self.master_name = master_name
+        self.node_names = node_names
 
 if __name__ == "__main__":
     
-    simulation_class = "simulations.formation_and_goal_seeking.MultiRobotGoalSeeker"
-    
+    #simulation_class = "simulations.formation_and_goal_seeking.MultiRobotGoalSeeker"
+    simulation_class = "simulations.circle_simulation.CircleSimulator"
     """
         Lowercase robot initials for initial
         positions and uppercase for goals:
@@ -153,22 +159,23 @@ if __name__ == "__main__":
         |  d l  |
          -------
     """
-    
     robot_params = [
-        RobotParams('donnie'),
-        RobotParams('leonardo', initial_position=(0, -1), heading=0)
+        RobotParams('donnie')
     ]
+    # robot_params = [
+    #     RobotParams('donnie'),
+    #     RobotParams('leonardo', initial_position=(0, -1), heading=0)
+    # ]
     master_params = MasterParams(
-        goal_positions = [(1, 1), (2, 1)],
+        simulator_args = {"goal_positions": [(1, 1)]},#, (2, 1)],
         simulation_class = simulation_class,
-        master = "donnie",
-        robot_names = [r.name for r in robot_params]
+        master_name = "donnie",
+        node_names = [r.name for r in robot_params]
     )
     
     # The path of the directory on the server (computer running this
-    # script) that should be copied/synced to each robot. If None, directories
-    # are left as is without syncing.
-    server_package_path = None
+    # script) that should be copied/synced to each robot. 
+    # If None, directories are left as is without syncing.
+    server_package_path = "../dmca_robot/"
 
-    
     connect_robots(master_params, robot_params, server_package_path)

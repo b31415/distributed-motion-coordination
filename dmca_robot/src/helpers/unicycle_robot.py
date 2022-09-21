@@ -1,14 +1,13 @@
 from time import time
 from math import pi
-from dmca_robot.src.helpers.lab_helpers import rotation_matrix
+from helpers.lab_helpers import rotation_matrix
 
 import rospy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 import numpy as np
 
-from helpers.lab_helpers import to_cartesian_velocity, \
-    to_offaxis, to_control_velocity
+from helpers.lab_helpers import to_cartesian_velocity, to_control_velocity
 from helpers.ros_helpers import extract_pose_info, velocity_control_to_twist
 
 class UnicycleRobot:
