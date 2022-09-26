@@ -388,10 +388,17 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             
         return super().run_simulation(initial_positions=initial_positions, *args)
         
-    def setup_plot(self, times, positions, velocities, goal_errors, formation_errors):
-        """Draw plot except for the animation."""
+    def setup_plot(self,
+        times,
+        positions,
+        velocities,
+        goal_errors,
+        formation_errors
+    ):
+        """
+        Draw plot except for the animation.
+        """
         # Setup
-        ax: tuple[plt.Axes, plt.Axes]
         n_cols = 2# if self.formation == FormationType.GOAL else 3
         _, ax = plt.subplots(2, n_cols, figsize=(4*n_cols, 8)) 
             

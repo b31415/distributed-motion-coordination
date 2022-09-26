@@ -7,36 +7,45 @@ Similar to circle_lab.py but used on each node in a multi-robot system.
 #   multiple robots to replace circle_lab.py instead of duplicating it.
 """
 import argparse
-from math import atan2, sqrt, cos, sin
+from math import sqrt
 import os
 import sys
 from time import time
 from datetime import datetime
 import importlib
+from helpers.unicycle_robot import UnicycleRobot
 
 import rospy
 import numpy as np
 import matplotlib.pyplot as plt
 
 from helpers.lab_helpers import init_python2_plot
-from helpers.unicycle_robot import UnicycleRobot
 
 class RosMaster:
     def __init__(self, args):
-        """
-        Save params
-        """
-        self.sim_args = dict(args.simulator_args)
-        full_simulator_class = args.simulator_class
-        
-        # Convert simulator_class from a string to a class
+        # Import simulator from config file
         try:
-            simulator_module, simulator_class = full_simulator_class.rsplit(".", 1)
-            self.SimulatorClass = getattr(importlib.import_module(simulator_module), simulator_class)
+            # Get dict of args from the config file
+            self.simulator = getattr(importlib.import_module(args.config_file), "simulator")
         except Exception:
-            print("Class '{}' not found".format(full_simulator_class))
+            print("Config file {} or corresponding simulator not found".format(args.config_file))
     
-    
+        self.names = [name.capitalize() for name in args.node_names]
+
+        self.robots = []
+        max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
+        
+        for id, name in enumerate(self.names):
+            self.robots.append(
+                UnicycleRobot(
+                    name = "RosAria" + name,
+                    log_level = rospy.DEBUG,
+                    max_control_velocity = max_control_velocity,
+                    heading_offset = args.headings[id],
+                    coordinate_offset = args.initial_positions[id]
+                )
+            )
+        
     def run(self):
         """
         Args:
@@ -49,35 +58,41 @@ class RosMaster:
         print("Python version: {}".format(sys.version))
         init_python2_plot()
 
-        """Simulator setup"""
-        # Desired goal relative to the inital position.
-        goal_centre = np.array((1, 1))
-        
-        # The maximum linear velocity from the simulation is sqrt(xdot^2 + ydot^2).
-        # Restrict xdot and ydot so that the maximum simulation velocity from
-        # simulation doesn't exceed the maximum linear robot velocity.
-        max_velocity = self.max_control_velocity[0]/sqrt(2)
-        
-        r = 1
-        simulator = self.SimulatorClass(
-            goal_centre = self.sim_args.goal_positions,
-            r = r,
-            dynamics_time_step = 1.0/self.robot.subscribe_freq,
-            max_velocity = max_velocity
-        )
-        
-        # TODO: curr_pos and curr_vel should be a list of positions and velocities respectively
-        #   for a multi-robot system.
-        # TODO: Add delta_t (i.e. time_step) as an argument to step_simulation to make it more accurate?
-        get_next_state = lambda curr_pos, curr_vel: simulator.step_simulation(curr_pos, curr_vel)[:2]
 
         print("Finished setup")
         start_time = time()
 
+        states = []
+        samples_handled = 0
+
         while not rospy.is_shutdown():
-            print("State: " + str(get_next_state()))
-            #TODO: Publish results to each robot
-            #self.robot.publish_next_state(get_next_state)
+            samples_recorded = min([len(robot.headings) for robot in self.robots])
+            print("{} {}".format(samples_handled, samples_recorded))
+            if samples_recorded > samples_handled:
+                curr_pos = []
+                curr_vel = []
+
+                # Get the current state of each robot
+                for robot in self.robots:
+                    _, pos, vel = robot.get_current_offaxis_state()
+                    curr_pos.append(pos)
+                    curr_vel.append(vel)
+
+                # Calculate the next state
+                new_state = self.simulator.step_simulation(
+                    np.ndarray(curr_pos),
+                    np.ndarray(curr_vel)
+                )
+                new_pos, new_vel = new_state[:2]
+                states.append(new_state)
+
+                # Publish the new state to make the robots move
+                for i, robot in enumerate(self.robots):
+                    robot.publish_offaxis(new_pos[i], new_vel[i])
+
+                samples_handled = samples_recorded
+
+            self.robots[0].rate.sleep()
 
         total_time = time() - start_time
         print("Experiment finished in {:.3}s. Saving data...".format(total_time))
@@ -89,56 +104,32 @@ class RosMaster:
         if not os.path.exists(dir):
             os.makedirs(dir)
         
-        np.savetxt("{}/offaxis_pos.csv".format(dir), self.robot.offaxis_positions, delimiter=",")
-        np.savetxt("{}/control_vel.csv".format(dir), self.robot.control_velocities, delimiter=",")
-        
-        plt.subplots(2, 2, figsize=(6.5, 6))
-        plt.subplot(221)
-        simulator.plot_trajectories(self.robot.offaxis_positions)
-        # plt.title("Off-axis Robot Positions")
-        # plt.plot(robot.offaxis_positions[:, 0], self.robot.offaxis_positions[:, 1])
-        # plt.plot(goal_circle[:, 0], goal_circle[:, 1])
-        # plt.xlabel("$x$ (m)")
-        # plt.ylabel("$y$ (m)")
-        # plt.legend(["Trajectory", "Goal set"], loc='lower right')
+        np.savetxt("{}/states.csv".format(dir), states, delimiter=",")
 
         times = np.linspace(0, total_time, len(self.robot.control_velocities[:, 0]))
-        plt.subplot(222)
-        plt.title("Linear Velocity")
-        plt.plot(times, self.robot.control_velocities[:, 0], lw=1)
-        plt.xlabel("Time (s)")
-        plt.ylabel("$v$ (m/s)")
+        
+        # Rearrange from a list of time-steps to a list of states
+        states = zip(*states)
+        self.simulator.setup_plot(times, *states)
 
-        plt.subplot(223)
-        plt.plot(times, self.robot.control_velocities[:, 1], lw=1)
-        plt.title("Angular Velocity")
-        plt.xlabel("Time (s)")
-        plt.ylabel("$\omega$ (rad/s)")
-
-        plt.subplot(224)
-        plt.plot(times, self.robot.headings, lw=1)
-        plt.title("Heading Angle")
-        plt.xlabel("Time (s)")
-        plt.ylabel("$\phi$ (rad)")
-
-        plt.suptitle("Unicycle Robot Circular Control with $r = {}$ and "
-            "c = ({:.2}, {:.2})".format(r, goal_centre[0], goal_centre[1]),
-            y=1.05
-        )
         plt.tight_layout()
-        plt.savefig("{}/offaxis_robot_positions.png".format(dir), dpi=150)
-        plt.savefig("{}/offaxis_robot_positions.pdf".format(dir))
+        plt.savefig("{}/robot.png".format(dir), dpi=150)
+        plt.savefig("{}/robot.pdf".format(dir))
         print("Saved figure")
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--master_name")
-    parser.add_argument("--goal_positions")
-    parser.add_argument("--simulator_class")
-    parser.add_argument("--node_names")
+    parser.add_argument("--master_name", default="donnie")
+    parser.add_argument("--node_names", default = ["donnie"])
+    parser.add_argument("--config_file", default = "multi_robot_config")
+    parser.add_argument("--headings", default = "[0]")
+    parser.add_argument("--initial_positions", default = "[(0, 0)]")
     args = parser.parse_args()
-    print("Master args:\n" + args)
 
-    master = RosMaster()
+    args.headings = list(args.headings)
+    args.initial_positions = [tuple(i) for i in list(args.initial_positions)]
+    print("Master args: {}\n".format(args))
+
+    master = RosMaster(args)
     master.run()
     

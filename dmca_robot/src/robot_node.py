@@ -22,13 +22,19 @@ class RosNode:
 
         """Robot setup"""
         self.max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
+
         self.robot = UnicycleRobot(
-            node_name = "RosAria" + self.name.capitalize(),
+            name = "RosAria" + self.name.capitalize(),
             log_level = rospy.WARN,
             max_control_velocity = self.max_control_velocity,
             heading_offset = self.heading,
-            coordinate_offset = self.initial_position
+            coordinate_offset = self.initial_position,
+            # The master subscribes to each robot's position instead
+            subscribe_freq = 0
         )
+
+        self.control_sub = rospy.Subscriber('control_inputs', list,
+            self.publish_control_velocity)
 
     def run(self):
         """
@@ -37,10 +43,17 @@ class RosNode:
                 ./dmca_robot/src directory. E.g. "simulations.circle_simulation.CircleSimulator".
             
         """
-
         while not rospy.is_shutdown():
             pass
-            #self.robot.publish_next_state(get_next_state)
+
+    def publish_control_velocity(self, velocities):
+        new_velocity = velocities[self.id]
+        rospy.logdebug_throttle(2, 
+            "Robot {}: Publishing velocity {}".format(
+                self.name, new_velocity
+            )
+        )
+        self.robot.publish_control_velocity(new_velocity)
 
     
 if __name__ == "__main__":
@@ -53,5 +66,5 @@ if __name__ == "__main__":
     print(args.name.capitalize() + " args:\n" + str(args))
 
     robot = RosNode(args)
-    #robot.run()
+    robot.run()
     

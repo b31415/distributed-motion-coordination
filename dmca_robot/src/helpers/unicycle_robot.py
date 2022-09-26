@@ -12,7 +12,7 @@ from helpers.ros_helpers import extract_pose_info, velocity_control_to_twist
 
 class UnicycleRobot:
     def __init__(self,
-        node_name = 'controller',
+        name = 'Robot',
         subscribe_freq = 10,
         log_level = rospy.DEBUG,
         max_control_velocity = (0.1, 1),
@@ -24,7 +24,7 @@ class UnicycleRobot:
             Each ros node should be configured with a unique name.
         
         Args:
-            node_name (str): Name used for referring to the current robot.
+            name (str): Name used for referring to the current robot.
                 Required for multi-agent systems.
             subscribe_freq (float): How often to subscribe to the robot's
                 pose in Hz. If None, the pose is not subscribed to.
@@ -57,10 +57,10 @@ class UnicycleRobot:
         self.subscribe_freq = subscribe_freq
         self.max_control_velocity = max_control_velocity
 
-        rospy.init_node(node_name, anonymous=False, log_level=log_level)
-        self.velocity_pub = rospy.Publisher('/RosAria/cmd_vel', Twist, queue_size=10)
+        rospy.init_node(name, anonymous=False, log_level=log_level)
+        self.velocity_pub = rospy.Publisher('{}/cmd_vel'.format(name), Twist, queue_size=10)
         if subscribe_freq:
-            self.pose_sub = rospy.Subscriber('/RosAria/pose', Odometry, self.pose_subscriber_)
+            self.pose_sub = rospy.Subscriber('{}/pose'.format(name), Odometry, self.pose_subscriber_)
         
         self.rate = rospy.Rate(self.subscribe_freq)
         
@@ -83,12 +83,19 @@ class UnicycleRobot:
             new_control_vel (np.ndarray)
         """
         # Get the most recently measured state
-        heading, offaxis_pos, offaxis_vel = self.get_current_offaxis_state()
+        _, offaxis_pos, offaxis_vel = self.get_current_offaxis_state()
 
         # Get the desired state for the next time-step from the current state
         new_offaxis_pos, new_offaxis_vel = get_next_state(offaxis_pos, offaxis_vel)
 
-        # Convert the desired velocity to (v, omega) and publishes it
+        return self.publish_offaxis(new_offaxis_pos, new_offaxis_vel)
+
+    def publish_offaxis(self, new_offaxis_pos, new_offaxis_vel):
+        """
+        Converts the desired offaxis values to (v, omega),
+        then publishes the control velocity.
+        """
+        heading = self.headings[-1]
         new_control_vel = to_control_velocity(heading, new_offaxis_vel, self.L)
         self.publish_control_velocity(new_control_vel)
 
@@ -101,7 +108,7 @@ class UnicycleRobot:
             )
         )
         return new_offaxis_pos, new_offaxis_vel, new_control_vel
-   
+
     def publish_control_velocity(self, velocity):
         """
         Args:

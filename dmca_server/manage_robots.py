@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+Run from ./dmca_server/ directory
+"""
 from __future__ import print_function
 from abc import ABCMeta
 
@@ -82,24 +85,24 @@ def connect_robots(master_params, robot_params, server_package_path):
         )
         
         print("Running nodes:")
-        for id, robot in enumerate(robots):
-            if robot.original_host == master:
-                print("\tRunning master script on {}".format(master))
-                robot.run("{} robot_master.py {} > output.log".format(command, str(master_params)))
+        # for id, robot in enumerate(robots):
+        #     if robot.original_host == master:
+        #         print("\tRunning master script on {}".format(master))
+        #         robot.run("{} robot_master.py {} > output.log".format(command, str(master_params)))
 
-            # Get the params for the current robot
-            params = next(
-                (r for r in robot_params if robot.original_host == r.name), None
-            )
+        #     # Get the params for the current robot
+        #     params = next(
+        #         (r for r in robot_params if robot.original_host == r.name), None
+        #     )
             
-            # Run the robot
-            print("\tRunning {}".format(robot.original_host))
-            robot.run(
-                "{} robot_node.py --id {} "
-                "{} >> output.log".format(
-                    command, id, str(params)
-                )
-            )
+        #     # Run the robot
+        #     print("\tRunning {}".format(robot.original_host))
+        #     robot.run(
+        #         "{} robot_node.py --id {} "
+        #         "{} >> output.log".format(
+        #             command, id, str(params)
+        #         )
+        #     )
         # except Exception as e:
         #     failed_robots = [r.host for r in e.result.failed.keys()]
         #     print("{} failed on robots: {}".format(file_name, failed_robots))
@@ -132,24 +135,22 @@ class RobotParams(Params):
         self.heading = heading
     
 class MasterParams(Params):
-    def __init__(self, simulator_args, simulation_class, master_name, node_names):
+    def __init__(self, config_file, master_name, node_names, headings, initial_positions):
         """
         Args:
-            simulator_args (str): A dictionary containing all
-                the args for the simulator.
+            config_file (str): Name of python file containing the simulation
+                class without the file extension.
             goal_positions (list): Coordinates of the robot goals in the master's
                 coordinate system. The order of elements in the list should
                 be the same as the list of RobotParams.
         """
-        self.simulator_args = simulator_args
-        self.simulation_class = simulation_class
+        self.config_file = config_file
         self.master_name = master_name
         self.node_names = node_names
+        self.headings = headings
+        self.initial_positions = initial_positions
 
 if __name__ == "__main__":
-    
-    #simulation_class = "simulations.formation_and_goal_seeking.MultiRobotGoalSeeker"
-    simulation_class = "simulations.circle_simulation.CircleSimulator"
     """
         Lowercase robot initials for initial
         positions and uppercase for goals:
@@ -167,10 +168,11 @@ if __name__ == "__main__":
     #     RobotParams('leonardo', initial_position=(0, -1), heading=0)
     # ]
     master_params = MasterParams(
-        simulator_args = {"goal_positions": [(1, 1)]},#, (2, 1)],
-        simulation_class = simulation_class,
+        config_file = "multi_robot_config",
         master_name = "donnie",
-        node_names = [r.name for r in robot_params]
+        node_names = [r.name for r in robot_params],
+        headings = [0],
+        initial_positions= [(0, 0)]
     )
     
     # The path of the directory on the server (computer running this
