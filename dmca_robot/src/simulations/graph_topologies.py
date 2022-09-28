@@ -33,7 +33,7 @@ TITLES = {
 }
 
     
-def create_graph(graph_id: int = 4, n_nodes = 4, states: list[dict] = None) -> nx.Graph:
+def create_graph(graph_id = 4, n_nodes = 4, states = None):
     """
     Create a graph with one of the topologies in [1].
     
@@ -52,9 +52,10 @@ def create_graph(graph_id: int = 4, n_nodes = 4, states: list[dict] = None) -> n
                 7: Complete graph (TODO: doesn't support states != None)
                 8: One leader (node 0), N - 1 followers, giving a tree of height 1
         n_nodes (int): Number of nodes in the graph. 
-        states: Each element represents the initial states for a single node.
+        states (list(dict)): Each element represents the initial states for a single node.
             The order of the list determines which node the values are assigned to.
-                
+    Returns:
+        (nx.Graph)         
     """
     if graph_id <= 6 and n_nodes != 4:
         raise ValueError("Graph ID {} requires 4 nodes, but got {} nodes".format(graph_id, n_nodes))
@@ -180,11 +181,11 @@ def run_simulation():
 def plot():
     """Plot the positions and velocities"""
     # Setup
-    ax: tuple[plt.Axes, plt.Axes]
     fig = plt.Figure
     fig, ax = plt.subplots(2, 1, figsize=(7, 7))
-    plt.suptitle(f"Evolution of States for {TITLES[GRAPH_ID]} ($\gamma = {GAMMA}$)", 
-        fontsize='x-large')
+    plt.suptitle("Evolution of States for {} ($\gamma = {}$)".format(
+            TITLES[GRAPH_ID], GAMMA
+        ), fontsize='x-large')
 
     # Plot positions
     plt.subplot(211)
@@ -218,7 +219,9 @@ def plot():
     if SAVE_FIG:
         for format in SAVE_FORMATS:
             os.makedirs(format, exist_ok=True)
-            plt.savefig(f"{format}/recreate_2nd_order_fig{GRAPH_ID}.{format}", format=format)
+            plt.savefig("{}/recreate_2nd_order_fig{}.{}".format(
+                format, GRAPH_ID, format
+            ), format=format)
     plt.show()
 
 if __name__ == "__main__":

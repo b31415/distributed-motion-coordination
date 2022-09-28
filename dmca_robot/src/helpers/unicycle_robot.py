@@ -12,12 +12,13 @@ from helpers.ros_helpers import extract_pose_info, velocity_control_to_twist
 
 class UnicycleRobot:
     def __init__(self,
-        name = 'Robot',
+        name = 'robot',
         subscribe_freq = 10,
         log_level = rospy.DEBUG,
-        max_control_velocity = (0.1, 1),
+        max_control_velocity = np.array((0.1, 1)),
         heading_offset = 0,
-        coordinate_offset = (0, 0)
+        coordinate_offset = np.array((0, 0)),
+        init = True
     ):
         """
         Notes:
@@ -56,11 +57,19 @@ class UnicycleRobot:
 
         self.subscribe_freq = subscribe_freq
         self.max_control_velocity = max_control_velocity
-
-        rospy.init_node(name, anonymous=False, log_level=log_level)
-        self.velocity_pub = rospy.Publisher('{}/cmd_vel'.format(name), Twist, queue_size=10)
+        
+        # Use the same name for the topics and node if the ros_name doesn't exist
+        # Otherwise, publish and subscribe to the existing topics and use
+        
+        ros_name = 'RosAria' + name.capitalize()
+        # if not any([s.startswith('/RosAriaDonnie') for s, _ in rospy.get_published_topics()]):
+        #     ros_name = name
+        if init:
+            rospy.init_node(name, anonymous=True, log_level=log_level)
+        
+        self.velocity_pub = rospy.Publisher('{}/cmd_vel'.format(ros_name), Twist, queue_size=10)
         if subscribe_freq:
-            self.pose_sub = rospy.Subscriber('{}/pose'.format(name), Odometry, self.pose_subscriber_)
+            self.pose_sub = rospy.Subscriber('{}/pose'.format(ros_name), Odometry, self.pose_subscriber_)
         
         self.rate = rospy.Rate(self.subscribe_freq)
         
@@ -135,9 +144,8 @@ class UnicycleRobot:
     def pose_subscriber_(self, pose_msg):
         """Appends the heading, position and velocity to the respective arrays."""
         self.last_pose_sub_time_ = time()
-        
         heading, position, velocity = extract_pose_info(pose_msg)
-        
+
         # Convert from the robot's local coordinate system
         # to the global coordinate system
         rotate = rotation_matrix(self.heading_offset)

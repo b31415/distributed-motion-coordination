@@ -24,7 +24,7 @@ class RosNode:
         self.max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
 
         self.robot = UnicycleRobot(
-            name = "RosAria" + self.name.capitalize(),
+            name = self.name,
             log_level = rospy.WARN,
             max_control_velocity = self.max_control_velocity,
             heading_offset = self.heading,

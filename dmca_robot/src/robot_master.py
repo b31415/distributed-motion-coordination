@@ -26,23 +26,29 @@ class RosMaster:
         # Import simulator from config file
         try:
             # Get dict of args from the config file
-            self.simulator = getattr(importlib.import_module(args.config_file), "simulator")
+            import_attr = lambda attr: getattr(importlib.import_module(args.config_file), attr)
+            self.simulator = import_attr("simulator")
+            headings = import_attr("headings")
+            initial_positions = import_attr("initial_positions")
         except Exception:
             print("Config file {} or corresponding simulator not found".format(args.config_file))
     
-        self.names = [name.capitalize() for name in args.node_names]
-
+        self.names = args.node_names
+        self.n_robots = len(self.names)
         self.robots = []
         max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
         
+        rospy.init_node(args.master_name, anonymous=True, log_level=rospy.DEBUG)
+
         for id, name in enumerate(self.names):
             self.robots.append(
                 UnicycleRobot(
-                    name = "RosAria" + name,
-                    log_level = rospy.DEBUG,
+                    name = name,
+                    log_level = rospy.WARN,
                     max_control_velocity = max_control_velocity,
-                    heading_offset = args.headings[id],
-                    coordinate_offset = args.initial_positions[id]
+                    heading_offset = headings[id],
+                    coordinate_offset = initial_positions[id],
+                    init = False
                 )
             )
         
@@ -67,22 +73,20 @@ class RosMaster:
 
         while not rospy.is_shutdown():
             samples_recorded = min([len(robot.headings) for robot in self.robots])
-            print("{} {}".format(samples_handled, samples_recorded))
+            print("positions recorded: {}, positions handled: {}".format(samples_recorded, samples_handled))
             if samples_recorded > samples_handled:
-                curr_pos = []
-                curr_vel = []
+                curr_pos = np.zeros((self.n_robots, 2))
+                curr_vel = np.zeros((self.n_robots, 2))
 
                 # Get the current state of each robot
-                for robot in self.robots:
+                for i, robot in enumerate(self.robots):
                     _, pos, vel = robot.get_current_offaxis_state()
-                    curr_pos.append(pos)
-                    curr_vel.append(vel)
+                    print("{} {}".format(robot, pos))
+                    curr_pos[i] = pos
+                    curr_pos[i] = vel
 
                 # Calculate the next state
-                new_state = self.simulator.step_simulation(
-                    np.ndarray(curr_pos),
-                    np.ndarray(curr_vel)
-                )
+                new_state = self.simulator.step_simulation(curr_pos, curr_vel)
                 new_pos, new_vel = new_state[:2]
                 states.append(new_state)
 
@@ -120,14 +124,11 @@ class RosMaster:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--master_name", default="donnie")
-    parser.add_argument("--node_names", default = ["donnie"])
+    #parser.add_argument("--node_names", default = ["donnie"])
+    parser.add_argument("--node_names", default = ["donnie", "leonardo"])
     parser.add_argument("--config_file", default = "multi_robot_config")
-    parser.add_argument("--headings", default = "[0]")
-    parser.add_argument("--initial_positions", default = "[(0, 0)]")
     args = parser.parse_args()
 
-    args.headings = list(args.headings)
-    args.initial_positions = [tuple(i) for i in list(args.initial_positions)]
     print("Master args: {}\n".format(args))
 
     master = RosMaster(args)

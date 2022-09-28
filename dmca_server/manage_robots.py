@@ -135,20 +135,15 @@ class RobotParams(Params):
         self.heading = heading
     
 class MasterParams(Params):
-    def __init__(self, config_file, master_name, node_names, headings, initial_positions):
+    def __init__(self, config_file, master_name, node_names):
         """
         Args:
             config_file (str): Name of python file containing the simulation
                 class without the file extension.
-            goal_positions (list): Coordinates of the robot goals in the master's
-                coordinate system. The order of elements in the list should
-                be the same as the list of RobotParams.
         """
         self.config_file = config_file
         self.master_name = master_name
         self.node_names = node_names
-        self.headings = headings
-        self.initial_positions = initial_positions
 
 if __name__ == "__main__":
     """
@@ -170,9 +165,7 @@ if __name__ == "__main__":
     master_params = MasterParams(
         config_file = "multi_robot_config",
         master_name = "donnie",
-        node_names = [r.name for r in robot_params],
-        headings = [0],
-        initial_positions= [(0, 0)]
+        node_names = [r.name for r in robot_params]
     )
     
     # The path of the directory on the server (computer running this
