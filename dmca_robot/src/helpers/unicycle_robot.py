@@ -61,7 +61,7 @@ class UnicycleRobot:
         # Use the same name for the topics and node if the ros_name doesn't exist
         # Otherwise, publish and subscribe to the existing topics and use
         
-        ros_name = 'RosAria' + name.capitalize()
+        ros_name = "/{}/RosAria".format(name)
         # if not any([s.startswith('/RosAriaDonnie') for s, _ in rospy.get_published_topics()]):
         #     ros_name = name
         if init:

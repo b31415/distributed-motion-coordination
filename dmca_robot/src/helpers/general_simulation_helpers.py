@@ -32,7 +32,6 @@ class GeneralSimulationHelper(object):
         self.max_velocity = max_velocity
         self.simulation_time = simulation_time
         self.dynamics_time_step = dynamics_time_step
-        print("Here {}".format(self.dynamics_time_step))
         self.L = L
         # TODO: Rename to goal
         if goal_centre is not None:

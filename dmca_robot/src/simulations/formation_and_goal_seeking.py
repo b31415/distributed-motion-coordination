@@ -44,7 +44,7 @@ from helpers.general_simulation_helpers import GeneralSimulationHelper
 try:
     from simulations.graph_topologies import create_graph
 except:
-    print("Can't import graph library for python2.7. Using to complete graph")
+    print("Can't import graph library for python2.7. Defaulting to complete graph")
     def create_graph(_, n_robots):
         # Create an array adjacency list
         # I.e. graph[i] is the neighbours of i

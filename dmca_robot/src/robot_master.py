@@ -22,23 +22,28 @@ import matplotlib.pyplot as plt
 from helpers.lab_helpers import init_python2_plot
 
 class RosMaster:
-    def __init__(self, args):
+    def __init__(self, config_module, master_name="donnie"):
+        """
+        Args:
+            config_module (str): Name of the file (excluding the file extension)
+
+        """
         # Import simulator from config file
         try:
-            # Get dict of args from the config file
-            import_attr = lambda attr: getattr(importlib.import_module(args.config_file), attr)
-            self.simulator = import_attr("simulator")
-            headings = import_attr("headings")
-            initial_positions = import_attr("initial_positions")
+            ConfigClass = getattr(importlib.import_module(config_module), "Config")
+            config = ConfigClass()
         except Exception:
-            print("Config file {} or corresponding simulator not found".format(args.config_file))
+            print("Config file {} not found".format(config_module))
+            exit()
     
-        self.names = args.node_names
+        self.names = config.get_node_names()
+        self.simulator = config.get_simulator()
+        
         self.n_robots = len(self.names)
         self.robots = []
         max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
         
-        rospy.init_node(args.master_name, anonymous=True, log_level=rospy.DEBUG)
+        rospy.init_node(master_name, anonymous=True, log_level=rospy.DEBUG)
 
         for id, name in enumerate(self.names):
             self.robots.append(
@@ -46,8 +51,8 @@ class RosMaster:
                     name = name,
                     log_level = rospy.WARN,
                     max_control_velocity = max_control_velocity,
-                    heading_offset = headings[id],
-                    coordinate_offset = initial_positions[id],
+                    heading_offset = config.get_headings()[id],
+                    coordinate_offset = config.get_initial_positions()[id],
                     init = False
                 )
             )
@@ -122,15 +127,7 @@ class RosMaster:
         print("Saved figure")
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--master_name", default="donnie")
-    #parser.add_argument("--node_names", default = ["donnie"])
-    parser.add_argument("--node_names", default = ["donnie", "leonardo"])
-    parser.add_argument("--config_file", default = "multi_robot_config")
-    args = parser.parse_args()
-
-    print("Master args: {}\n".format(args))
-
-    master = RosMaster(args)
+    config_module = "multi_robot_config"
+    master = RosMaster(config_module)
     master.run()
     
