@@ -30,6 +30,9 @@ class CircleSimulator(CircleSimulationHelper):
         super(CircleSimulator, self).__init__(**sim_args)
         self.cartesian = cartesian
 
+    def get_simulation_value_names(self):
+        return ["positions", "velocities", "control inputs"]
+    
     def step_simulation(self, curr_pos, curr_vel):
         """
         Calculates one time-step of the simulation.

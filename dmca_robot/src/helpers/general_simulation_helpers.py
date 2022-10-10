@@ -36,7 +36,18 @@ class GeneralSimulationHelper(object):
         # TODO: Rename to goal
         if goal_centre is not None:
             self.goal_centre = goal_centre
-            
+
+    @abstractmethod
+    def get_simulation_value_names(self):
+        """
+        Returns:
+            (list(str)): Name of each of the elements
+                returned from step_simulation()
+        Example:
+            ["Positions", "Velocities"]
+        """
+        pass
+
     @abstractmethod
     def step_simulation(self, positions, velocities):
         """

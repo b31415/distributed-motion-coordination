@@ -17,7 +17,7 @@ class UnicycleRobot:
         log_level = rospy.DEBUG,
         max_control_velocity = np.array((0.1, 1)),
         heading_offset = 0,
-        coordinate_offset = np.array((0, 0)),
+        coordinate_offset = np.array((0.0, 0.0)),
         init = True
     ):
         """
@@ -43,9 +43,16 @@ class UnicycleRobot:
                 state of the robot, it corresponds to the global/non-local frame.
             coordinate offset (tuple[float, float]): See heading_offset.
         """
-        self.L = 1
+        self.name = name
+        self.L = 1.0
+
+        # The inital position of the master is defined as (0, 0),
+        # so translate coordinates by the initial position.
+        self.initial_heading = None
+        self.initial_position = None
+
         self.heading_offset = heading_offset
-        self.coordinate_offset = np.array(coordinate_offset)
+        self.coordinate_offset = np.array(coordinate_offset, dtype=float)
 
         # Prevents updating the control velocity more often than
         # then the pose is recorded to avoid inaccurate velocity publishes.
@@ -108,7 +115,7 @@ class UnicycleRobot:
         new_control_vel = to_control_velocity(heading, new_offaxis_vel, self.L)
         self.publish_control_velocity(new_control_vel)
 
-        rospy.logdebug_throttle(2, 
+        rospy.logdebug_throttle(1, 
             "Desired next state:\n"
             "\tx: {}, y: {}\n"
             "\tv: {}, omega: {}".format(
@@ -144,25 +151,31 @@ class UnicycleRobot:
     def pose_subscriber_(self, pose_msg):
         """Appends the heading, position and velocity to the respective arrays."""
         self.last_pose_sub_time_ = time()
-        heading, position, velocity = extract_pose_info(pose_msg)
+        heading, position, control_velocity = extract_pose_info(pose_msg)
 
+        # Update the offsets to take into account the initial state
+        if self.initial_position is None:
+            self.initial_heading = heading
+            self.initial_position = position
+            print("Initial positions")
+        
         # Convert from the robot's local coordinate system
         # to the global coordinate system
         rotate = rotation_matrix(self.heading_offset)
-        position = np.matmul(rotate, position) + self.coordinate_offset
-        velocity = np.matmul(rotate, velocity)
-        heading += self.heading_offset
+        position = np.matmul(rotate, position - self.initial_position) + self.coordinate_offset
+        heading += self.heading_offset - self.initial_heading
         
-        rospy.loginfo_throttle(2, "Received robot state:\n"
-            "\theading: {}\n"
-            "\tx: {}, y: {}\n"
-            "\tv: {}, omega: {}".format(
+        rospy.logdebug_throttle(1, "Received {}'s state:\n"
+            "\theading: {:.1f} degrees\n"
+            "\tx: {:.2f}m, y: {:.2f}m\n"
+            "\tv: {:.2f}m/s, omega: {:.2f}rad/s".format(
+                self.name,
                 180.0 * heading / pi,
                 position[0], position[1],
-                velocity[0], velocity[1]
+                control_velocity[0], control_velocity[1]
             )
         )
-        self.append_new_state(heading, position, velocity)
+        self.append_new_state(heading, position, control_velocity)
 
     def get_current_offaxis_state(self):
         """
@@ -175,12 +188,12 @@ class UnicycleRobot:
         while len(self.headings) <= self.msgs_processed:
             self.rate.sleep()
         
-        rospy.logdebug_throttle(2,
-            "Finished blocking to get the state"
-            "({}/{} messages processed)".format(
-                self.msgs_processed, len(self.headings)
-            )
-        )
+        # rospy.logdebug_throttle(1,
+        #     "Finished blocking to get the state"
+        #     "({}/{} messages processed)".format(
+        #         self.msgs_processed, len(self.headings)
+        #     )
+        # )
 
         heading = self.headings[-1]
         offaxis_pos = self.offaxis_positions[-1]
