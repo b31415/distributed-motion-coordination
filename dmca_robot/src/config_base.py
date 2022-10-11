@@ -4,6 +4,10 @@ class ConfigBase():
     __metaclass__ = ABCMeta
 
     def __init__(self, node_names, headings, initial_positions):
+        """
+        Args:
+            headings (list): Angles in radians
+        """
         self.node_names = node_names
         self.headings = headings
         self.initial_positions = initial_positions

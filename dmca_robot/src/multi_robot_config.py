@@ -5,22 +5,29 @@ from config_base import ConfigBase
 class Config(ConfigBase):
     def __init__(self):
         
+        # super(Config, self).__init__(
+        #     node_names = ["donnie", "leonardo"],
+        #     headings = [0.0, 0.0],
+        #     initial_positions = np.array([
+        #         [0, 0], [0, -1]
+        #     ])
+        # )
+
+        # self.goal_positions = np.array([
+        #     [1, 1], [2, 1]
+        # ])
+
         super(Config, self).__init__(
             node_names = ["donnie", "leonardo"],
-            headings = [0.0, 0.0],
+            headings = [0.0, np.pi/2],
             initial_positions = np.array([
-                [0, 0], [0, -1]
+                [0, 0], [0, -2]
             ])
         )
 
         self.goal_positions = np.array([
-            [1, 1], [2, 1]
+            [5, 0], [1, 2]
         ])
-        # headings = [0.0]
-        # initial_positions = np.array([
-        #     [0, 0]
-        # ])
-        #goal_positions = np.array([(1, 1)])
 
     def get_simulator(self):
         return MultiRobotGoalSeeker(

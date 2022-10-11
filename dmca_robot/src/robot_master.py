@@ -83,10 +83,12 @@ class RosMaster:
                 # Get the current state of each robot
                 for i, robot in enumerate(self.robots):
                     _, pos, vel = robot.get_current_offaxis_state()
+                    print("Current {} pos {}, vel {}".format(robot.name, pos, vel))
                     curr_pos[i] = pos
-                    curr_pos[i] = vel
+                    curr_vel[i] = vel
 
                 # Calculate the next state
+                print("Current total pos {}, vel {}, pos0 {}".format(curr_pos, curr_vel, curr_pos[0]))
                 new_state = self.simulator.step_simulation(curr_pos, curr_vel)
                 new_pos, new_vel = new_state[:2]
                 print("Simulated donnie pos {}, vel {}".format(new_pos[0], new_vel[0]))

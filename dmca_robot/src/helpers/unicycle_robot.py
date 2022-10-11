@@ -165,10 +165,10 @@ class UnicycleRobot:
         position = np.matmul(rotate, position - self.initial_position) + self.coordinate_offset
         heading += self.heading_offset - self.initial_heading
         
-        rospy.logdebug_throttle(1, "Received {}'s state:\n"
+        rospy.logdebug("Received {}'s state:\n"
             "\theading: {:.1f} degrees\n"
-            "\tx: {:.2f}m, y: {:.2f}m\n"
-            "\tv: {:.2f}m/s, omega: {:.2f}rad/s".format(
+            "\tx: {:.3f}m, y: {:.3f}m\n"
+            "\tv: {:.3f}m/s, omega: {:.3f}rad/s".format(
                 self.name,
                 180.0 * heading / pi,
                 position[0], position[1],
@@ -199,6 +199,19 @@ class UnicycleRobot:
         offaxis_pos = self.offaxis_positions[-1]
         control_vel = self.control_velocities[-1]
         offaxis_vel = to_cartesian_velocity(heading, control_vel, self.L)
+        
+        rospy.loginfo("Got {}'s current offaxis state:\n"
+            "\theading: {:.1f} degrees\n"
+            "\tx: {:.3f}m, y: {:.3f}m\n"
+            "\tv: {:.3f}m/s, omega: {:.3f}rad/s\n"
+            "\txdot: {:.3f}m/s, ydot: {:.3f}m/s".format(
+                self.name,
+                180.0 * heading / pi,
+                offaxis_pos[0], offaxis_pos[1],
+                control_vel[0], control_vel[1],
+                offaxis_vel[0], offaxis_vel[1]
+            )
+        )
         return heading, offaxis_pos, offaxis_vel
 
     def append_new_state(self, heading, offaxis_position, control_velocity):

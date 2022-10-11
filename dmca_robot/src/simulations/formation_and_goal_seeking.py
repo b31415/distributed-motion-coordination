@@ -323,7 +323,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """
         ge = self.goal_error(i, curr_pos, curr_vel)
         fe = self.formation_error(i, curr_pos, curr_vel)
-        total_error = ge + fe[0]
+        total_error = ge + fe[0] * 0 #FIXME
         return ge, fe, total_error
 
     # def get_new_centre(self, i, delta_pos):
