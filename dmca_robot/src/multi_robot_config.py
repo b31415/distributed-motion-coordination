@@ -18,16 +18,19 @@ class Config(ConfigBase):
         # ])
 
         super(Config, self).__init__(
-            node_names = ["donnie", "leonardo"],
-            headings = [0.0, np.pi/2],
-            initial_positions = np.array([
-                [0, 0], [0, -2]
-            ])
+            node_names = ["donnie"]#, "leonardo"]
         )
 
         self.goal_positions = np.array([
-            [5, 0], [1, 2]
+            [2, -1.5]#, [-4, -2]
         ])
+        # super(Config, self).__init__(
+        #     node_names = ["donnie"]
+        # )
+
+        # self.goal_positions = np.array([
+        #     [1, 0]
+        # ])
 
     def get_simulator(self):
         return MultiRobotGoalSeeker(

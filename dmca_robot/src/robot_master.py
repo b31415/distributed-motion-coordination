@@ -40,18 +40,16 @@ class RosMaster:
         
         self.n_robots = len(self.names)
         self.robots = []
-        max_control_velocity = np.array((0.2, 1)) # (m/s, rad/s)
+        max_control_velocity = np.array((0.1, 1)) # (m/s, rad/s)
         
         rospy.init_node(master_name, anonymous=True, log_level=rospy.DEBUG)
 
-        for id, name in enumerate(self.names):
+        for _, name in enumerate(self.names):
             self.robots.append(
                 UnicycleRobot(
                     name = name,
                     log_level = rospy.INFO,
                     max_control_velocity = max_control_velocity,
-                    heading_offset = config.get_headings()[id],
-                    coordinate_offset = config.get_initial_positions()[id],
                     init = False
                 )
             )
@@ -88,7 +86,6 @@ class RosMaster:
                     curr_vel[i] = vel
 
                 # Calculate the next state
-                print("Current total pos {}, vel {}, pos0 {}".format(curr_pos, curr_vel, curr_pos[0]))
                 new_state = self.simulator.step_simulation(curr_pos, curr_vel)
                 new_pos, new_vel = new_state[:2]
                 print("Simulated donnie pos {}, vel {}".format(new_pos[0], new_vel[0]))

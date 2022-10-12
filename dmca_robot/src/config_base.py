@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 class ConfigBase():
     __metaclass__ = ABCMeta
 
-    def __init__(self, node_names, headings, initial_positions):
+    def __init__(self, node_names, headings = None, initial_positions = None):
         """
         Args:
             headings (list): Angles in radians
