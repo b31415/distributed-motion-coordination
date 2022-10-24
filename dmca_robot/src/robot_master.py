@@ -6,12 +6,12 @@ Similar to circle_lab.py but used on each node in a multi-robot system.
 # TODO: Refactor so that this file works with a single robot as well as
 #   multiple robots to replace circle_lab.py instead of duplicating it.
 """
-from math import atan2, sqrt, cos, sin
 import os
 import sys
 from time import time
 from datetime import datetime
 import importlib
+import json
 
 import rospy
 import numpy as np
@@ -21,21 +21,39 @@ from helpers.lab_helpers import init_python2_plot
 from helpers.unicycle_robot import UnicycleRobot
 
 class RosMaster:
-    def __init__(self):
+    def __init__(self, config_module, master_name="donnie"):
         """
-        Save params
+        Args:
+            config_module (str): Name of the file (excluding the file extension)
+
         """
-        self.goal_positions = np.array(rospy.get_params("~goal_positions"))
-        full_simulator_class = rospy.get_param("~simulator_class")
-        
-        # Convert simulator_class from a string to a class
+        # Import simulator from config file
         try:
-            simulator_module, simulator_class = full_simulator_class.rsplit(".", 1)
-            self.SimulatorClass = getattr(importlib.import_module(simulator_module), simulator_class)
+            ConfigClass = getattr(importlib.import_module(config_module), "Config")
+            config = ConfigClass()
         except Exception:
-            print("Class '{}' not found".format(full_simulator_class))
+            print("Config file {} not found".format(config_module))
+            exit()
     
-    
+        self.names = config.get_node_names()
+        self.simulator = config.get_simulator()
+        
+        self.n_robots = len(self.names)
+        self.robots = []
+        max_control_velocity = np.array((0.1, 1)) # (m/s, rad/s)
+        
+        rospy.init_node(master_name, anonymous=True, log_level=rospy.DEBUG)
+
+        for _, name in enumerate(self.names):
+            self.robots.append(
+                UnicycleRobot(
+                    name = name,
+                    log_level = rospy.INFO,
+                    max_control_velocity = max_control_velocity,
+                    init = False
+                )
+            )
+        
     def run(self):
         """
         Args:
@@ -43,39 +61,46 @@ class RosMaster:
                 ./dmca_robot/src directory. E.g. "simulations.circle_simulation.CircleSimulator".
             
         """
-        
-        # TODO: Check initial heading is 0 and initial pos is (0, 0)
-        print("Python version: {}".format(sys.version))
         init_python2_plot()
-
-        """Simulator setup"""
-        # Desired goal relative to the inital position.
-        goal_centre = np.array((1, 1))
-        
-        # The maximum linear velocity from the simulation is sqrt(xdot^2 + ydot^2).
-        # Restrict xdot and ydot so that the maximum simulation velocity from
-        # simulation doesn't exceed the maximum linear robot velocity.
-        max_velocity = self.max_control_velocity[0]/sqrt(2)
-        
-        simulator = self.SimulatorClass(
-            goal_positions = self.goal_positions,
-            r = 1,
-            dynamics_time_step = 1.0/self.robot.subscribe_freq,
-            max_velocity = max_velocity
-        )
-        
-        # TODO: curr_pos and curr_vel should be a list of positions and velocities respectively
-        #   for a multi-robot system.
-        # TODO: Add delta_t (i.e. time_step) as an argument to step_simulation to make it more accurate?
-        get_next_state = lambda curr_pos, curr_vel: simulator.step_simulation(curr_pos, curr_vel)[:2]
 
         print("Finished setup")
         start_time = time()
 
-        while not rospy.is_shutdown():
-            #TODO: Publish results to each robot
-            self.robot.publish_next_state(get_next_state)
+        state_names = self.simulator.get_simulation_value_names()
+        states = {name: None for name in state_names}
+        
+        samples_handled = 0
+        curr_pos = np.zeros((self.n_robots, 2))
+        curr_vel = np.zeros((self.n_robots, 2))
 
+        while not rospy.is_shutdown():
+            samples_recorded = min([len(robot.headings) for robot in self.robots])
+            
+            if samples_recorded > samples_handled:
+
+                # Get the current state of each robot
+                for i, robot in enumerate(self.robots):
+                    _, pos, vel = robot.get_current_offaxis_state()
+                    print("Current {} pos {}, vel {}".format(robot.name, pos, vel))
+                    curr_pos[i] = pos
+                    curr_vel[i] = vel
+
+                # Calculate the next state
+                new_state = self.simulator.step_simulation(curr_pos, curr_vel)
+                new_pos, new_vel = new_state[:2]
+                print("Simulated donnie pos {}, vel {}".format(new_pos[0], new_vel[0]))
+                # Save state
+                states = self.append_state(states, new_state)
+
+                # Publish the new state to make the robots move
+                for i, robot in enumerate(self.robots):
+                    robot.publish_offaxis(new_pos[i], new_vel[i])
+
+                samples_handled = samples_recorded
+            else:
+                self.robots[0].rate.sleep()
+
+        print("Robot {}'s positions: {}".format(self.robots[0].name, self.robots[0].offaxis_positions))
         total_time = time() - start_time
         print("Experiment finished in {:.3}s. Saving data...".format(total_time))
 
@@ -86,47 +111,66 @@ class RosMaster:
         if not os.path.exists(dir):
             os.makedirs(dir)
         
-        np.savetxt("{}/offaxis_pos.csv".format(dir), self.robot.offaxis_positions, delimiter=",")
-        np.savetxt("{}/control_vel.csv".format(dir), self.robot.control_velocities, delimiter=",")
         
-        plt.subplots(2, 2, figsize=(6.5, 6))
-        plt.subplot(221)
-        simulator.plot_trajectories(self.robot.offaxis_positions)
-        # plt.title("Off-axis Robot Positions")
-        # plt.plot(robot.offaxis_positions[:, 0], self.robot.offaxis_positions[:, 1])
-        # plt.plot(goal_circle[:, 0], goal_circle[:, 1])
-        # plt.xlabel("$x$ (m)")
-        # plt.ylabel("$y$ (m)")
-        # plt.legend(["Trajectory", "Goal set"], loc='lower right')
+        times = np.linspace(0, total_time, states[state_names[0]].shape[0])
+        
+        # Get states.values() in the same order as state_names
+        state_values = [states[name] for name in state_names]
+        self.simulator.setup_plot(times, *state_values)
 
-        times = np.linspace(0, total_time, len(self.robot.control_velocities[:, 0]))
-        plt.subplot(222)
-        plt.title("Linear Velocity")
-        plt.plot(times, self.robot.control_velocities[:, 0], lw=1)
-        plt.xlabel("Time (s)")
-        plt.ylabel("$v$ (m/s)")
-
-        plt.subplot(223)
-        plt.plot(times, self.robot.control_velocities[:, 1], lw=1)
-        plt.title("Angular Velocity")
-        plt.xlabel("Time (s)")
-        plt.ylabel("$\omega$ (rad/s)")
-
-        plt.subplot(224)
-        plt.plot(times, self.robot.headings, lw=1)
-        plt.title("Heading Angle")
-        plt.xlabel("Time (s)")
-        plt.ylabel("$\phi$ (rad)")
-
-        plt.suptitle("Unicycle Robot Circular Control with $r = {}$ and "
-            "c = ({:.2}, {:.2})".format(r, goal_centre[0], goal_centre[1]),
-            y=1.05
-        )
         plt.tight_layout()
-        plt.savefig("{}/offaxis_robot_positions.png".format(dir), dpi=150)
-        plt.savefig("{}/offaxis_robot_positions.pdf".format(dir))
+        plt.savefig("{}/robot.png".format(dir), dpi=150)
+        plt.savefig("{}/robot.pdf".format(dir))
         print("Saved figure")
-    
+
+        self.save_states(dir, states)
+
+    def append_state(self, states, new_state):
+        """
+        Args:
+            states (dict(np.ndarray: shape = [n_times, ...])):
+                All previously processed states.
+            new_state ((np.ndarray)): Tuple of states
+                for the current time-step.
+        Returns:
+            (dict(np.ndarray: shape = [n_times, ...])): States
+        """
+        new_state = list(new_state)
+
+        for i, state in enumerate(new_state):
+            # Add time dimension
+            new_state[i] = np.expand_dims(state, 0)
+            
+        keys = self.simulator.get_simulation_value_names()
+        
+        if states[keys[0]] is None:
+            for i, key in enumerate(keys):
+                states[key] = new_state[i]
+        else:
+            for i, key in enumerate(keys):
+                states[key] = np.concatenate((states[key], new_state[i]), axis=0)
+        
+        return states
+
+    def save_states(self, dir, states):
+        """
+        Convert ndarrays to lists so that they can
+        be converted to JSON.
+
+        Note: Mangles states
+        """
+        file_name = "{}/states.json".format(dir)
+        print("Saving states to {}".format(file_name))
+
+        for key, value in states.items():
+            if type(value) == np.ndarray:
+                states[key] = value.tolist()
+        
+        with open(file_name, "w") as file:
+            json.dump(states, file, indent=4)
+        
 if __name__ == "__main__":
-    node_name = rospy.get_param('~node_name')
+    config_module = "multi_robot_config"
+    master = RosMaster(config_module)
+    master.run()
     

@@ -6,36 +6,35 @@ Similar to circle_lab.py but used on each node in a multi-robot system.
 # TODO: Refactor so that this file works with a single robot as well as
 #   multiple robots to replace circle_lab.py instead of duplicating it.
 """
-from math import atan2, sqrt, cos, sin
-import os
 import sys
-from time import time
-from datetime import datetime
-import importlib
-
 import rospy
 import numpy as np
-import matplotlib.pyplot as plt
+import argparse
 
-from helpers.lab_helpers import init_python2_plot
 from helpers.unicycle_robot import UnicycleRobot
-from robot_master import RosMaster
 
 class RosNode:
-    def __init__(self):
-        self.name = rospy.get_param("~name")
-        self.initial_position = rospy.get_param("~initial_position")
-        self.heading = rospy.get_param("~heading")
+    def __init__(self, args):
+        self.id = args.id
+        self.name = args.name
+        self.initial_position = np.array(args.initial_position)
+        self.heading = args.heading
 
         """Robot setup"""
         self.max_control_velocity = np.array((0.5, 1)) # (m/s, rad/s)
+
         self.robot = UnicycleRobot(
-            node_name = self.name,
+            name = self.name,
             log_level = rospy.WARN,
             max_control_velocity = self.max_control_velocity,
             heading_offset = self.heading,
-            coordinate_offset = self.initial_position
+            coordinate_offset = self.initial_position,
+            # The master subscribes to each robot's position instead
+            subscribe_freq = 0
         )
+
+        self.control_sub = rospy.Subscriber('control_inputs', list,
+            self.publish_control_velocity)
 
     def run(self):
         """
@@ -44,12 +43,28 @@ class RosNode:
                 ./dmca_robot/src directory. E.g. "simulations.circle_simulation.CircleSimulator".
             
         """
-
         while not rospy.is_shutdown():
-            self.robot.publish_next_state(get_next_state)
+            pass
+
+    def publish_control_velocity(self, velocities):
+        new_velocity = velocities[self.id]
+        rospy.logdebug_throttle(2, 
+            "Robot {}: Publishing velocity {}".format(
+                self.name, new_velocity
+            )
+        )
+        self.robot.publish_control_velocity(new_velocity)
 
     
 if __name__ == "__main__":
-    robot = RosMaster() if rospy.get_param("~is_master") else RosNode()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--id", type=int)
+    parser.add_argument("--name")
+    parser.add_argument("--initial_position")
+    parser.add_argument("--heading", type=float)
+    args = parser.parse_args()
+    print(args.name.capitalize() + " args:\n" + str(args))
+
+    robot = RosNode(args)
     robot.run()
     

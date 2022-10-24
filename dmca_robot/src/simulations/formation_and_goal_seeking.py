@@ -33,15 +33,26 @@ TODO: The graph topology from second_order_different_topologies.py
     doesn't get used by the control law.
 TODO: Use GeneralSimulationHelper.goal_centre
 """
-from builtins import super
 from enum import Enum
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from helpers.robot_formation import generate_ellipse
-from simulations.graph_topologies import create_graph
 from helpers.circle_simulation_helpers import cartesian_to_polar
 from helpers.general_simulation_helpers import GeneralSimulationHelper
+
+try:
+    from simulations.graph_topologies import create_graph
+except:
+    print("Can't import graph library for python2.7. Defaulting to complete graph")
+    def create_graph(_, n_robots):
+        # Create an array adjacency list
+        # I.e. graph[i] is the neighbours of i
+        graph = []
+        for i in range(n_robots):
+            graph.append([j for j in range(n_robots) if i != j])
+        return graph
+
 
 def cartesian_to_polar_graph(cartesian_coords, centre):
     """
@@ -73,7 +84,8 @@ def get_bounding_box(arrays):
     NaN and inf values are ignored.
     
     Args:
-        arrays (Iterable): Tuple of np.ndarrays, each with dimensions Nx2
+        arrays (Iterable): Tuple of np.ndarrays, each with
+            dimensions n_robots x 2.
     Return:
         xlims, ylims
     """
@@ -86,6 +98,8 @@ def get_bounding_box(arrays):
         not (np.isnan(array).any() or np.isinf(array).any())
     x_values = [i[:, 0] for i in arrays if good_array_values(i)]
     y_values = [i[:, 1] for i in arrays if good_array_values(i)]
+
+    # Calculate bounding box limits
     x_min = np.floor(np.min(x_values)) - 1
     x_max = np.ceil(np.max(x_values)) + 1
     y_min = np.floor(np.min(y_values)) - 1
@@ -133,8 +147,8 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             goal_positions (np.ndarray: shape = n_robots x 2 | Formation)
             graph_id (int): Defaults to a complete graph
         """
-        # super(GeneralSimulationHelper, self).__init__(**sim_args)
-        super().__init__(**sim_args)
+        super(MultiRobotGoalSeeker, self).__init__(**sim_args)
+        #super().__init__(**sim_args)
         self.graph = create_graph(graph_id, n_robots)
         self.n_robots = n_robots
         
@@ -155,6 +169,8 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """Initial and goal formations"""
         if type(goal_positions) == Formation:
             self.goal = goal_positions.to_positions(n_robots)
+        else:
+            self.goal = goal_positions
         
         self.formation = FormationType.GOAL
         self.goal_avg = np.mean(self.goal, axis=0)
@@ -307,7 +323,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """
         ge = self.goal_error(i, curr_pos, curr_vel)
         fe = self.formation_error(i, curr_pos, curr_vel)
-        total_error = ge + fe[0]
+        total_error = ge + 0*fe[0] #FIXME
         return ge, fe, total_error
 
     # def get_new_centre(self, i, delta_pos):
@@ -331,6 +347,9 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     #     new_local_centre += self.dynamics_time_step * self.centre_consensus_weight * u
     #     return new_local_centre
 
+    def get_simulation_value_names(self):
+        return ["positions", "velocities", "goal errors", "formation errors"]
+
     def step_simulation(self, curr_pos, curr_vel, *_):
         """
         Calculates one time-step of the simulation.
@@ -341,9 +360,6 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
                 with super().step_simulation()
         Returns:
             (position, velocity, goal_error, formation_errors)
-            control_input (np.ndarray): For acceleration control
-            new_pos (np.ndarray): On-axis cartesian positions
-            new_vel (np.ndarray): On-axis cartesian velocities
         """
         new_positions = np.zeros((self.n_robots, 2))
         new_velocities = np.zeros((self.n_robots, 2))
@@ -390,8 +406,16 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             
         return super().run_simulation(initial_positions=initial_positions, *args)
         
-    def setup_plot(self, times, positions, velocities, goal_errors, formation_errors):
-        """Draw plot except for the animation."""
+    def setup_plot(self,
+        times,
+        positions,
+        velocities,
+        goal_errors,
+        formation_errors
+    ):
+        """
+        Draw plot except for the animation.
+        """
         # Setup
         n_cols = 2# if self.formation == FormationType.GOAL else 3
         _, ax = plt.subplots(2, n_cols, figsize=(4*n_cols, 8)) 
@@ -423,20 +447,20 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         
         for id, colour in enumerate(COLOURS):
             # Create lines with no points to be used for the animation 
-            pos_lines.extend(plt.plot([], [], f'{colour}', linewidth=1))
+            pos_lines.extend(plt.plot([], [], colour, linewidth=1))
             
             # Plot a complete, thin version of the trajectories to be animated
-            plt.plot(x_coords[:, id], y_coords[:, id], f'{colour}', linewidth=1)
+            plt.plot(x_coords[:, id], y_coords[:, id], colour, linewidth=1)
             
             # Plot markers for start, actual end and desired end points respectively
             start_markers.extend(plt.plot(x_coords[0, id], 
-                y_coords[0, id], f'{colour}o', ls='', ms=4))
+                y_coords[0, id], colour + "o", ls='', ms=4))
             
             end_markers.extend(plt.plot(x_coords[-1, id], 
-                y_coords[-1, id], f'{colour}s', ls='', ms=4))
+                y_coords[-1, id], colour + "s", ls='', ms=4))
             
             goal_markers.extend(plt.plot(x_goal[id],
-                y_goal[id], f'{colour}*', ls='', ms=4))
+                y_goal[id], colour + "*", ls='', ms=4))
             
         # Plot the legend for the first plot
         labels = ["robot {}".format(i + 1) for i in range(self.n_robots)]
@@ -456,23 +480,23 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             
         #     for id, colour in enumerate(COLOURS):
         #         # Create lines with no points to be used for the animation 
-        #         avg_lines.extend(plt.plot([], [], f'{colour}', linewidth=1))
+        #         avg_lines.extend(plt.plot([], [], colour, linewidth=1))
                 
         #         # Plot a complete, thin version of the 
         #         # trajectories to be animated
         #         plt.plot(x_coords[:, id], y_coords[:, id], 
-        #             f'{colour}:', linewidth=0.4)
+        #             colour + ":", linewidth=0.4)
                 
         #         # Plot markers for start, actual end and 
         #         # desired end points respectively
         #         plt.plot(x_coords[0, id], y_coords[0, id], 
-        #             f'{colour}o', ls='', ms=4)
+        #             colour + "o", ls='', ms=4)
                 
         #         plt.plot(x_coords[-1, id], y_coords[-1, id], 
-        #             f'{colour}s', ls='', ms=4)
+        #             colour + "s", ls='', ms=4)
                 
         #     # By definition of consensus, there is only one goal
-        #     plt.plot(self.goal_avg[0], self.goal_avg[1], f'k*', ls='', ms=4)
+        #     plt.plot(self.goal_avg[0], self.goal_avg[1], "k*", ls='', ms=4)
             
         #     plt.title("Average Consensus Trajectories")
         #     plt.xlabel("x (m)", fontsize='large')
@@ -489,7 +513,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         plt.title("Robot Velocities")
         for id, colour in enumerate(COLOURS):
             plt.plot(times, np.linalg.norm(velocities[:, id], axis=1), 
-                f'{colour}', lw=1)
+                colour, lw=1)
             
         plt.xlabel("Time (s)", fontsize='large')
         plt.ylabel("Norm of velocity (m/s)", fontsize='large')
@@ -500,7 +524,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         plt.title("Total Goal Error")
         for id, colour in enumerate(COLOURS):
             plt.plot(times, np.linalg.norm(goal_errors[:, id], axis=1), 
-                f'{colour}', lw=1)
+                colour, lw=1)
             
         plt.xlabel("Time (s)", fontsize='large')
         plt.ylabel("Norm of goal error", fontsize='large')
@@ -513,9 +537,9 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             plt.subplot(self.plot_start + 2)
             plt.title("Formation Error")
             for id, colour in enumerate(COLOURS):
-                plt.plot(times, formation_err_norm[:, id], f'{colour}', lw=1)
+                plt.plot(times, formation_err_norm[:, id], colour, lw=1)
             plt.ylabel("Norm of formation error", fontsize='large')
-            
+            plt.ylim(ymin=0)
         else:
             avg_formation_errors = np.mean(formation_errors, axis=1)
             avg_formation_magnitude = np.linalg.norm(avg_formation_errors, axis=2)
@@ -538,10 +562,9 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             borderpad       = 0.2,
             ncol            = 1,
             title           = "Legend",
-            title_fontsize  = 'large',
+            #title_fontsize  = 'large',
             bbox_to_anchor   = (1, 1.4)
         )
-        plt.tight_layout(h_pad=-5, rect=(0, 0, 1.01, 1))
         # else:
         #     plt.axis('off')
         #     ax[0, 2].legend(
@@ -555,6 +578,8 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         #     )
         #     plt.tight_layout()
         
+        # Last element of rect allows enough space for suptitle
+        #plt.tight_layout(h_pad=-5, rect=(0, 0, 1.01, 0.95))
         return pos_lines, avg_lines
 
 #     x_data, y_data =[], []

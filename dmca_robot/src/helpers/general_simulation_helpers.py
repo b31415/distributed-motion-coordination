@@ -36,7 +36,18 @@ class GeneralSimulationHelper(object):
         # TODO: Rename to goal
         if goal_centre is not None:
             self.goal_centre = goal_centre
-            
+
+    @abstractmethod
+    def get_simulation_value_names(self):
+        """
+        Returns:
+            (list(str)): Name of each of the elements
+                returned from step_simulation()
+        Example:
+            ["Positions", "Velocities"]
+        """
+        pass
+
     @abstractmethod
     def step_simulation(self, positions, velocities, headings=None):
         """
@@ -87,11 +98,11 @@ class GeneralSimulationHelper(object):
         # Note: zero control velocity results in zero cartesian velocity
         # Get the dimensions of the arrays from dummy return values of step_simulation()
         arrays = self.step_simulation(initial_positions, curr_control_vel, curr_heading)
-        step_simulation_values = [np.zeros((n_times, *arrays[i].shape)) \
+        step_simulation_values = [np.zeros((n_times,) + arrays[i].shape) \
             for i in range(len(arrays))]
         headings = np.zeros((n_times, n_robots)) if multi_robot else np.zeros(n_times)
         control_velocities = np.zeros_like(step_simulation_values[1])
-        return_values = (times, headings, control_velocities, *step_simulation_values)
+        return_values = (times, headings, control_velocities) + tuple(step_simulation_values)
         
         for curr_time in range(n_times):
             # Calculate the next state
@@ -110,7 +121,7 @@ class GeneralSimulationHelper(object):
             new_heading = curr_heading + self.dynamics_time_step * new_control_vel[..., 1]
             
             # Save the current values
-            state = (curr_heading, curr_control_vel, curr_pos, curr_vel, *other_values[2:])
+            state = (curr_heading, curr_control_vel, curr_pos, curr_vel) + other_values[2:]
             for i, state_value in enumerate(state):
                 return_values[i + 1][curr_time] = state_value
             

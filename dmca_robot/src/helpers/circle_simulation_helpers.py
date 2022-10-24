@@ -52,7 +52,7 @@ class CircleSimulationHelper(GeneralSimulationHelper):
     __metaclass__ = ABCMeta
     
     def __init__(self,
-        r = 2,
+        r = 1,
         goal_velocity = None,
         goal_centre = np.array([3, 4]),
         goal_angular_velocity = None,

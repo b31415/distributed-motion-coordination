@@ -18,7 +18,7 @@ class CircleSimulator(CircleSimulationHelper):
         """
         Args:
             cartesian (bool): Default = false
-            r (float): Radius. Default = 2
+            r (float): Radius. Default = 1
             goal_velocity (float): Default = 0.8 x max_velocity
             goal_centre (np.ndarray): Default = [3, 4]
             goal_angular_velocity: Default = goal_velocity / r. How fast
@@ -30,6 +30,9 @@ class CircleSimulator(CircleSimulationHelper):
         super(CircleSimulator, self).__init__(**sim_args)
         self.cartesian = cartesian
 
+    def get_simulation_value_names(self):
+        return ["positions", "velocities", "control inputs"]
+    
     def step_simulation(self, curr_pos, curr_vel, *_):
         """
         Calculates one time-step of the simulation.
