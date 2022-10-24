@@ -11,7 +11,7 @@
             "cwd": "${workspaceFolder}/dmca_robot/src/",
             // "module": "simulations.formation_and_goal_seeking",
             // "module": "circle_sim",
-            "module": "simulations.circle_simulation",
+            "module": "simulations.obstacle_avoidance",
             "console": "integratedTerminal",
             "justMyCode": true
         }

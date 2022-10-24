@@ -331,12 +331,14 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     #     new_local_centre += self.dynamics_time_step * self.centre_consensus_weight * u
     #     return new_local_centre
 
-    def step_simulation(self, curr_pos, curr_vel):
+    def step_simulation(self, curr_pos, curr_vel, *_):
         """
         Calculates one time-step of the simulation.
         Args:
             curr_pos: Current robot positions
             curr_vel: Current robot velocities
+            *_: Ignore extra arguments for compatibility
+                with super().step_simulation()
         Returns:
             (position, velocity, goal_error, formation_errors)
             control_input (np.ndarray): For acceleration control
@@ -391,7 +393,6 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     def setup_plot(self, times, positions, velocities, goal_errors, formation_errors):
         """Draw plot except for the animation."""
         # Setup
-        ax: tuple[plt.Axes, plt.Axes]
         n_cols = 2# if self.formation == FormationType.GOAL else 3
         _, ax = plt.subplots(2, n_cols, figsize=(4*n_cols, 8)) 
             

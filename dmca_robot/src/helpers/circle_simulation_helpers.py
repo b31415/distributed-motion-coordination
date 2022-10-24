@@ -38,6 +38,15 @@ def expand_and_append(a, b):
     """
     return np.array(np.append(a, np.expand_dims(b, axis=0), axis=0))
 
+def circle_points(centre, radius):
+    """
+    Generate an array of points on a circle
+    in cartesian coordinates.
+    """
+    n_points = 100
+    return np.array([centre + radius*np.array([np.cos(theta), np.sin(theta)]) \
+        for theta in np.linspace(0, 2*np.pi, n_points)])
+
 # Helpers that rely on a set of attributes
 class CircleSimulationHelper(GeneralSimulationHelper):
     __metaclass__ = ABCMeta
@@ -150,6 +159,4 @@ class CircleSimulationHelper(GeneralSimulationHelper):
         Return:
             ((np.ndarray, np.ndarray))
         """
-        n_points = 100
-        return np.array([self.goal_centre + self.r*np.array([np.cos(theta), np.sin(theta)]) \
-            for theta in np.linspace(0, 2*np.pi, n_points)])
+        return circle_points(self.goal_centre, self.r)
