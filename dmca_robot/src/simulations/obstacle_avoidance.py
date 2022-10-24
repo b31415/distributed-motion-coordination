@@ -55,11 +55,11 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         
         # Calculate the number of distinct unordered pairs of robots
         # n choose 2 = 1 + 2 + ... + n - 1 = n(n - 1)/2
-        n_pairs = self.n_robots * (self.n_robots - 1) / 2
+        n_pairs = int(self.n_robots * (self.n_robots - 1) / 2)
         
         # E.g. for 4 robots, generate pairs (1, 2), (1, 3),
         # (1, 4), (2, 3), (2, 4), (3, 4)
-        self.pairs = np.zeros((n_pairs, 2))
+        self.pairs = np.zeros((n_pairs, 2), dtype=int)
         curr_pair = 0
         for i in range(self.n_robots):
             for j in range(i + 1, self.n_robots):
@@ -126,11 +126,16 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             Jf: Formation Jacobian matrix
             df: Vector of interdistances
         """
-        # Calculate n(i, j, positions) for each pair (i, j)
-        df = np.zeros(self.pairs.shape[0])
-        Jf = np.zeros_like(self.pairs)
-        for pair, (i, j) in enumerate(self.pairs):
-            df[pair], Jf[pair] = self.interdistance(i, j, positions)
+        n_pairs = self.pairs.shape[0]
+        df = np.zeros(n_pairs)
+        Jf = np.zeros((n_pairs, 2*self.n_robots))
+        
+        # Each row of the Jacobian Jf depends on one (i, j) pair
+        for row_id, (i, j) in enumerate(self.pairs):
+            dij, nij = self.interdistance(i, j, positions)
+            df[row_id] = dij
+            Jf[row_id, 2*i:2*(i + 1)] = -nij
+            Jf[row_id, 2*j:2*(j + 1)] = nij
         return Jf, df
     
     def goal_seeking(self, positions):
@@ -152,7 +157,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         # Calculate the first two rows of Jn in equation (14)
         # in [1] and set the third row to zeros
         top_part = np.tile(np.eye(2)/self.n_robots, [1, self.n_robots])
-        Jn = np.concatenate((top_part, np.zeros(1, 2*self.n_robots)), axis=0)
+        Jn = np.concatenate((top_part, np.zeros((1, 2*self.n_robots))), axis=0)
         
         # Calculate [mxj, myj]
         m = lambda j: np.array([x_sum, y_sum]) * \
@@ -198,7 +203,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             (next_pos, next_vel, goal_error, formation_error)
         """
         """Calculate variables defined in section 2 of [1]"""
-        Jx = np.zeros((self.n_robots, self.n_robots))
+        Jx = np.zeros((2*self.n_robots, 2*self.n_robots))
         for i in range(self.n_robots):
             Jx[2*i:2*(i + 1), 2*i:2*(i + 1)] = self.B(curr_heading[i])
         
@@ -213,7 +218,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         # Au = b [2]
         R = np.matmul(Jf, Jx)
         s = self.lambda_f * (self.df_d - df)
-        uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim)
+        uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim, solver='cvxopt')
         
         """Solve S2 level 2 from table 1 in [1]"""
         A = R
@@ -231,7 +236,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             self.lambda_ot * (dot - self.dst),
             self.omega_lim
         ), axis = 0)
-        un = solve_ls(R, s, G, h, A, b)
+        un = solve_ls(R, s, G, h, A, b, solver='cvxopt')
         
         # Convert control velocity to position and cartesian velocity
         control_vel = un.reshape((self.n_robots, 2))
