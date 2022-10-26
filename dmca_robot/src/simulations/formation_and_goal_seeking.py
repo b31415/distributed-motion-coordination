@@ -358,6 +358,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """
         new_positions = np.zeros((self.n_robots, 2))
         new_velocities = np.zeros((self.n_robots, 2))
+        new_accelerations = np.zeros((self.n_robots, 2))
         new_goal_errors = np.zeros((self.n_robots, 2))
         new_formation_errors = np.zeros((self.n_robots, 3, 2))
         
@@ -369,6 +370,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             ge, fe, total_error = self.objective_function(i, curr_pos, curr_vel)
             new_goal_errors[i] = ge
             new_formation_errors[i] = fe
+            new_accelerations[i] = total_error
             
             # Saturate the velocity to simulate the maximum speed of the robot
             new_velocities[i] = np.clip(
@@ -378,7 +380,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             
             # new_centres[i] = self.get_new_centre(i, delta_pos)
         
-        return new_positions, new_velocities, new_goal_errors, new_formation_errors
+        return new_positions, new_velocities, new_accelerations, new_goal_errors, new_formation_errors
     
     def run_simulation(self, initial_positions, *args):
         """
@@ -393,6 +395,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             control_velocities
             positions
             velocities
+            accelerations
             goal_errors
             formation_errors
         """
@@ -606,11 +609,14 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     
 if __name__ == "__main__":
     
-    test_case = "reproduce paper"
-    initial_formation = Formation((0, 0), 0, 1)
-    n_robots = 4
+    test_case = "custom"
+
+    n_robots = 2
     
-    if test_case == "ellipse":
+    if test_case == "custom":
+        initial_formation = np.array([[0, 0], [0, -2]])
+        goal_formation = np.array([[5, 0], [1, 2]])
+    elif test_case == "ellipse":
         goal_formation = Formation((0, 0), 0, 0.75, 1.5)
     elif test_case == "rotate on spot":
         goal_formation = Formation((0, 0), np.pi/2, 1)
@@ -631,10 +637,11 @@ if __name__ == "__main__":
         graph_id = graph_id,
         dynamics_time_step = 0.1
     )
-    sim_results = sim.run_simulation(initial_positions=initial_formation)
+    times, _, _, positions, velocities, _, goal_errors, formation_errors = \
+        sim.run_simulation(initial_positions=initial_formation)
     
     # Set up data for animation
-    lines, avg_lines = sim.setup_plot(sim_results[0], *sim_results[3:])
+    lines, avg_lines = sim.setup_plot(times, positions, velocities, goal_errors, formation_errors)
     if avg_lines:
         lines.extend(avg_lines)
     # data = np.concatenate((positions, sim.centres), axis=1)

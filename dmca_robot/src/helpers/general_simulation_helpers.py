@@ -3,6 +3,10 @@ import numpy as np
 from helpers.lab_helpers import *
 
 """
+
+References:
+    [1] TODO: WMR Control Via Dynamic Feedback Linearization
+    
 TODO: Add setup_plot(), the plot animation, 
     FRAME_SKIP, etc. to here.
 """
@@ -47,7 +51,7 @@ class GeneralSimulationHelper(object):
             will always be the same if step_simulation() is called
             multiple times with the same arguments.
         Returns:
-            (new_positions, new_velocities, ...): The desired
+            (new_positions, new_velocities, new_accelerations, ...): The desired
                 state for the next time-step
         """
         pass
@@ -62,7 +66,7 @@ class GeneralSimulationHelper(object):
                 to a control velocity).
         Returns:
             (times, headings, control_velocities, *step_simulation_values) =
-            (times, headings, control_velocities, positions, velocities, ...)
+            (times, headings, control_velocities, positions, velocities, accelerations, ...)
                 where the ith element of step_simulation_values is an np.ndarray
                 corresponding to the ith return value of step_simulation(). The first
                 dimension of this array has length len(times) and the remaining
@@ -122,3 +126,58 @@ class GeneralSimulationHelper(object):
             curr_vel         = new_vel
              
         return return_values
+    
+    def trajectory_tracking(self, initial_positions, initial_heading=0, max_control_velocity=None):
+        # TODO: Refactor
+        # TODO: Handle zero velocity     
+        times = np.arange(0, self.simulation_time, self.dynamics_time_step)[:-1]
+        n_times = len(times)
+        desired_positions = np.zeros((n_times, 2))
+        desired_positions[0] = initial_positions
+        desired_velocities = np.zeros((n_times, 2))
+        desired_velocities[0] = (0.1, 0)
+        desired_accelerations = np.zeros((n_times, 2))
+        
+        # Calculate desired values
+        for i in range(1, n_times):
+            pos, vel, acc, *_ = self.step_simulation(desired_positions[i - 1], desired_velocities[i - 1])[:2]
+            desired_positions[i] = pos
+            desired_velocities[i] = vel
+            desired_accelerations[i] = acc
+        
+        n_times = desired_positions.shape[0]
+        control_velocities = np.zeros((n_times, 2))
+        positions = np.zeros((n_times, 2))
+        positions[0] = desired_positions[0]
+        velocities = np.zeros((n_times, 2))
+        curr_heading = initial_heading
+        headings = np.zeros(n_times)
+        headings[0] = curr_heading
+        
+        kp = 1
+        kd = 1
+        v = 0
+        
+        for i in range(1, n_times):
+            desired_pos = desired_positions[i]
+            desired_vel = desired_velocities[i]
+            desired_accel = desired_accelerations[i]
+                
+            curr_pos = positions[i - 1]
+            curr_vel = velocities[i - 1]
+            
+            # Calculate control velocity according to equations (8) and (17) in [1]
+            u = desired_accel + kp*(desired_pos - curr_pos) + kd*(desired_vel - curr_vel)
+            
+            linear_accel = u[0]*np.cos(curr_heading) + u[1]*np.sin(curr_heading)
+            v += linear_accel * self.dynamics_time_step
+            omega = (u[1]*np.cos(curr_heading) - u[0]*np.sin(curr_heading)) / v
+            
+            control_velocities[i] = (v, omega)
+            new_heading = curr_heading + self.dynamics_time_step * omega
+            headings[i] = new_heading
+            velocities[i] = (v*np.cos(new_heading), v*np.sin(new_heading))
+            positions[i] = curr_pos + self.dynamics_time_step * velocities[i]
+            
+        return times, headings, control_velocities, positions, velocities, desired_positions, desired_velocities
+        

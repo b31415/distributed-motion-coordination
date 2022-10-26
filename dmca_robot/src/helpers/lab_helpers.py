@@ -360,7 +360,7 @@ def to_onaxis(
         onaxis_positions (np.ndarray)
         onaxis_velocities (np.ndarray)
     """
-    n_dims = len(control_velocities.shape)
+    n_dims = len(offaxis_positions.shape)
     if isinstance(headings, Number):
         headings = np.array([headings])
 

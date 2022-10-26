@@ -39,7 +39,9 @@ class CircleSimulator(CircleSimulationHelper):
         Returns:
             new_pos (np.ndarray): On-axis cartesian position
             new_vel (np.ndarray): On-axis cartesian velocity
-            control_input (np.ndarray): For acceleration control
+            control_input (np.ndarray): Acceleration. The system has
+                double integrator dynamics so the control law determines
+                the acceleration.
         """
         get_control_input = self.get_cartesian_control_input \
             if self.cartesian else self.get_polar_control_input
@@ -198,8 +200,11 @@ class CircleSimulator(CircleSimulationHelper):
 
     
 if __name__ == "__main__":
-    simulator = CircleSimulator()
-    times, _, _, positions, velocities, control_signal = simulator.run_simulation((0, 0))
+    simulator = CircleSimulator(r = 2, use_integral_term = False)
+    times, _, _, positions, velocities, desired_positions, desired_velocities = \
+        simulator.trajectory_tracking((0, 0))
+
+    #times, _, _, positions, velocities, control_signal = simulator.run_simulation((0, 0))
     
     # Plot and animate the simulation results
     line = simulator.setup_plot(times, positions, velocities)
