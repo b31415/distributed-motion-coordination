@@ -25,28 +25,31 @@ def twist_to_velocity_control(twist):
     omega = twist.angular.z
     return np.array([v, omega])
 
-def extract_pose_info(pose):
+def extract_twist_info(twist):
     """
+    Extract velocity from twist
     Args:
-        pose (Odometry)
+        twist (Twist)
     Returns:
-        heading (float): Heading angle in radians
-        position (np.ndarray): Off-axis (x, y) coordinates
         control_velocity (np.ndarray): Has the form (v, omega)
     """
-    twist = pose.twist.twist # Velocity info
-    pose = pose.pose.pose # Position and orientation info
-    
-    # Extract velocity
     v = twist.linear.x
     omega = twist.angular.z
     velocity = np.array([v, omega])
+    return velocity
 
+def extract_pose_info(pose):
+    """
+    Args:
+        pose (Pose): Contains position and orientation info.
+    Returns:
+        heading (float): Heading angle in radians
+        position (np.ndarray): Off-axis (x, y) coordinates
+    """
     # Ignore the z-axis since the robot drives in a flat plane
     position = np.array((pose.position.x, pose.position.y))
 
     # Calculate the heading (yaw) angle from the quaternion orientation
     q = pose.orientation
     _, _, heading = euler_from_quaternion([q.x, q.y, q.z, q.w])
-    return heading, position, velocity
-    
+    return heading, position

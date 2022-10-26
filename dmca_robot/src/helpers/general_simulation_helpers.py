@@ -36,14 +36,24 @@ class GeneralSimulationHelper(object):
         self.max_velocity = max_velocity
         self.simulation_time = simulation_time
         self.dynamics_time_step = dynamics_time_step
-        print("Here {}".format(self.dynamics_time_step))
         self.L = L
         # TODO: Rename to goal
         if goal_centre is not None:
             self.goal_centre = goal_centre
-            
+
     @abstractmethod
-    def step_simulation(self, positions, velocities):
+    def get_simulation_value_names(self):
+        """
+        Returns:
+            (list(str)): Name of each of the elements
+                returned from step_simulation()
+        Example:
+            ["Positions", "Velocities"]
+        """
+        pass
+
+    @abstractmethod
+    def step_simulation(self, positions, velocities, headings=None):
         """
         Notes:
             Implementations of this method should save or change
@@ -91,7 +101,7 @@ class GeneralSimulationHelper(object):
         # Pre-allocate arrays
         # Note: zero control velocity results in zero cartesian velocity
         # Get the dimensions of the arrays from dummy return values of step_simulation()
-        arrays = self.step_simulation(initial_positions, curr_control_vel)
+        arrays = self.step_simulation(initial_positions, curr_control_vel, curr_heading)
         step_simulation_values = [np.zeros((n_times,) + arrays[i].shape) \
             for i in range(len(arrays))]
         headings = np.zeros((n_times, n_robots)) if multi_robot else np.zeros(n_times)
@@ -102,7 +112,7 @@ class GeneralSimulationHelper(object):
             # Calculate the next state
             curr_vel = to_cartesian_velocity(curr_heading, curr_control_vel, self.L)
             
-            other_values = self.step_simulation(curr_pos, curr_vel)
+            other_values = self.step_simulation(curr_pos, curr_vel, curr_heading)
             new_pos, new_vel = other_values[0:2]
             
             new_control_vel = to_control_velocity(curr_heading, new_vel, self.L)
