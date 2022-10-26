@@ -273,9 +273,12 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """
         # Terms in objective function that depend only on i
         goto_goal = -self.A * self.pos_error(i, curr_pos)
+        # The measured positions may have some unknown offset due to the 
+        # motion capture points not being placed directly on the rotation axis,
+        # so stop once some threshold is reach.
+        goto_goal = goto_goal if np.linalg.norm(goto_goal) > 0.2 else 0*goto_goal
         stop_when_goal_reached = -self.A * self.gamma * curr_vel[i]
         
-        #return stop_when_goal_reached
         return goto_goal + stop_when_goal_reached
 
     def formation_error(self, i, curr_pos, curr_vel):
@@ -323,7 +326,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """
         ge = self.goal_error(i, curr_pos, curr_vel)
         fe = self.formation_error(i, curr_pos, curr_vel)
-        total_error = ge + 0*fe[0] #FIXME
+        total_error = ge + 1*fe[0] #FIXME
         return ge, fe, total_error
 
     # def get_new_centre(self, i, delta_pos):

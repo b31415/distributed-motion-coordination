@@ -118,8 +118,8 @@ class RosMaster:
         state_values = [states[name] for name in state_names]
         self.simulator.setup_plot(times, *state_values)
 
-        plt.tight_layout()
-        plt.savefig("{}/robot.png".format(dir), dpi=150)
+        #plt.tight_layout()
+        plt.savefig("{}/robot.png".format(dir), dpi=300)
         plt.savefig("{}/robot.pdf".format(dir))
         print("Saved figure")
 
