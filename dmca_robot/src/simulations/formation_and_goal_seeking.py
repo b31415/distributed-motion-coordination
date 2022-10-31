@@ -525,10 +525,12 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """Error plots"""
         plt.subplot(self.plot_start + n_cols + 2)
         plt.title("Total Goal Error")
-        for id, colour in enumerate(COLOURS):
-            plt.plot(times, np.linalg.norm(goal_errors[:, id], axis=1), 
-                colour, lw=1)
-            
+        if len(goal_errors.shape) == 3:
+            for id, colour in enumerate(COLOURS):
+                plt.plot(times, np.linalg.norm(goal_errors[:, id], axis=1), 
+                    colour, lw=1)
+        else:
+            plt.plot(times, np.linalg.norm(goal_errors, axis=1), lw=1)
         plt.xlabel("Time (s)", fontsize='large')
         plt.ylabel("Norm of goal error", fontsize='large')
         plt.grid(True, lw=0.15)  
@@ -536,11 +538,18 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         # Different formation error plot for goal 
         # vs other formation error terms
         if self.formation == FormationType.GOAL:
-            formation_err_norm = np.linalg.norm(formation_errors[:, :, 0, :], axis=2)
+            if len(formation_errors.shape) == 4:
+                formation_err_norm = np.linalg.norm(formation_errors[:, :, 0, :], axis=2)
+
             plt.subplot(self.plot_start + 2)
             plt.title("Formation Error")
-            for id, colour in enumerate(COLOURS):
-                plt.plot(times, formation_err_norm[:, id], colour, lw=1)
+            if len(formation_errors.shape) == 3:
+                for id, colour in enumerate(COLOURS):
+                    plt.plot(times, formation_err_norm[:, id], colour, lw=1)
+            else:
+                for i in range(formation_errors.shape[1]):
+                    plt.plot(times, formation_errors[:, i], lw=1)
+                    
             plt.ylabel("Norm of formation error", fontsize='large')
             plt.ylim(ymin=0)
         else:

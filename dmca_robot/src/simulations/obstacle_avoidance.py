@@ -10,8 +10,9 @@ References:
 import numpy as np
 from numpy import pi, cos, sin, arctan2, sqrt
 from numpy.linalg import norm
-from qpsolvers import solve_ls
+from qpsolvers import solve_ls, solve_qp # pip install qpsolvers[all_pypi_solvers]
 import matplotlib.pyplot as plt
+from time import perf_counter
 
 from helpers.circle_simulation_helpers import circle_points
 from helpers.lab_helpers import to_cartesian_velocity, rotation_matrix
@@ -24,11 +25,12 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             goal_centre,
             goal_heading,
             obstacle_centres,
-            safety_distances,
+            obstacle_radii,
             max_control_velocity,
             distance_between_wheels,
             wheel_radius,
             heading_weights,
+            safety_distance = None,
             **sim_args
         ):
         """
@@ -38,9 +40,9 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         Args:
             obstacle_centres (np.ndarray: shape = n_obstacles x 2): List of
                 obstacle centre positions in cartesian coordinates.
-            safety_distances (np.ndarray: shape = n_obstacles): The minimum
-                distance that the robot should come towards the centre of
-                the object.
+            safety_distance (Optional[np.ndarray]: shape = n_obstacles): The minimum
+                distance that the centroid of the formation should come within
+                the edge of an obstacle. Default: Max radius of the desired formation.
             heading_weights (np.ndarray: shape = n_robots): Array of
                 a_i values in [1] which sum to 1 and are used to denote
                 the front/heading of the robot formation.
@@ -77,13 +79,17 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             [-1, -0.5*b]
         ]) / r
         v_max, omega_max = max_control_velocity
-        wl_max = (v_max - 0.5*b*omega_max)/r
+        v_min = -v_max
+        omega_min = -omega_max
+        wl_max = (v_max - 0.5*b*omega_min)/r
         wr_max = (v_max + 0.5*b*omega_max)/r
-        
-        # Let wl_min = -wl_max and wr_min = -wr_max
-        H = np.array([wl_max, wr_max, wl_max, wr_max])
+        wl_min = (v_min - 0.5*b*omega_max)/r
+        wr_min = (v_min + 0.5*b*omega_min)/r
+        H = np.array([wl_max, wr_max, -wl_min, -wr_min])
         _, desired_interdistances = self.formation_keeping(initial_positions)
         
+        if safety_distance is None:
+            safety_distance = max(norm(goal_positions.T - goal_centre, axis=1))
         # Assign constants
         # TODO: Tune control gains (lambda)
         self.a = heading_weights
@@ -97,7 +103,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         self.pd = goal_centre
         self.theta_d = goal_heading
         self.pot = obstacle_centres
-        self.dst = safety_distances
+        self.dst = safety_distance
         
         
     def B(self, theta):
@@ -219,15 +225,18 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         R = np.matmul(Jf, Jx)
         s = self.lambda_f * (self.df_d - df)
         uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim, solver='cvxopt')
-        
         """Solve S2 level 2 from table 1 in [1]"""
-        A = R
-        b = np.matmul(A, uf)
+        rank = np.linalg.matrix_rank(R)
+        # Remove redundant rows (i.e. no redundant equality constraints) to
+        # make A full-rank so that the solver doesn't have errors. 
+        A = R[:rank]
+        b = np.matmul(A, uf)[:rank]
+        
         R = np.matmul(Jn, Jx)
-        s = np.array([
+        s = np.append(
             self.lambda_p * (self.pd - pc),
             self.lambda_theta * (self.theta_d - theta_c)
-        ])
+        )
         G = np.concatenate((
             -np.matmul(Jot, Jx),
             self.Jlim
@@ -236,8 +245,8 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             self.lambda_ot * (dot - self.dst),
             self.omega_lim
         ), axis = 0)
-        un = solve_ls(R, s, G, h, A, b, solver='cvxopt')
-        
+        #un = solve_ls(R, s, G, h, A=A, b=b, solver='cvxopt')
+        un = solve_ls(R, s, G, h, solver='cvxopt')
         # Convert control velocity to position and cartesian velocity
         control_vel = un.reshape((self.n_robots, 2))
         new_heading = curr_heading + self.dynamics_time_step * control_vel[:, 1]
@@ -248,14 +257,20 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         return new_pos, new_vel, goal_error, df
         
     def setup_plot(self, *args):
+        times, positions = args[:2]
         super().setup_plot(*args)
         
         # Add obstacles to the trajectory plot
         plt.subplot(221)
-        for centre, radius in zip(self.pot, self.dst):
+        radius = self.dst
+        for centre in zip(self.pot, self:
             obstacle = circle_points(centre, radius)
-            plt.plot(obstacle[:, 0], obstacle[:, 1])
+            safety_boundary = circle_points(centre, radius)
+            plt.plot(obstacle[:, 0], obstacle[:, 1], 'g', lw=1)
+            plt.plot(safety_boundary[:, 0], safety_boundary[:, 1], 'k..', lw=0.3)
             
+        centroid = np.mean(positions, axis=1)
+        plt.plot(centroid[:, 0], centroid[:, 1], 'k--', lw=0.5) 
         plt.subplot(222)
         plt.ylabel("Interdistances", fontsize='large')
         
@@ -267,20 +282,33 @@ if __name__ == "__main__":
         [0, 0],
         [0, 1]
     ])
-    
     simulator = ObstacleAvoider(
         n_robots = 4,
         initial_positions = initial_positions,
         goal_centre = np.array([4, 4]),
         goal_heading = pi/2,
-        obstacle_centres = np.array([[2, 1.5]]),
-        safety_distances = 0.75,
+        obstacle_centres = np.array([[2, 1.5], [2, 4]]),
+        obstacle_radii = np.array([[0.5, 1]]),
         max_control_velocity = np.array([0.1, 1]),
         distance_between_wheels = 0.35,
         wheel_radius = 0.1,
-        heading_weights = np.array([0.5, 0.5, 0, 0])
+        heading_weights = np.array([0.5, 0.5, 0, 0]),
+        dynamics_time_step = 1e-1
     )
     
+    start_time = perf_counter()
     # Don't need to set max control velocity for run_simulation is it
     # is handled by step_simulation as a constraint in the HQP problem
-    simulator.run_simulation(initial_positions)
+    times, _, _, positions, velocities, goal_errors, formation_errors = \
+        simulator.run_simulation(initial_positions)
+    
+    duration = perf_counter() - start_time
+    print("Took {:.5f}s for {} time steps ({:.5f} s/s)".format(duration, len(times), duration / simulator.simulation_time))
+    
+    # Set up data for animation
+    simulator.setup_plot(times, positions, velocities, goal_errors, formation_errors)
+    
+    # if avg_lines:
+    #     lines.extend(avg_lines)
+        
+    plt.show()
