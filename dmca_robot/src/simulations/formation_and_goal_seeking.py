@@ -414,13 +414,17 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         positions,
         velocities,
         goal_errors,
-        formation_errors
+        formation_errors,
+        legend = True
     ):
         """
         Draw plot except for the animation.
+        Args:
+            legend (boolean): If True use a common legend for all plots.
+                Use False to manually draw a legend after calling this function.
         """
         # Setup
-        n_cols = 2# if self.formation == FormationType.GOAL else 3
+        n_cols = 2
         _, ax = plt.subplots(2, n_cols, figsize=(4*n_cols, 8)) 
             
         plt.suptitle(self.sup_title, fontsize='x-large')
@@ -473,43 +477,6 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         
         """Plot the internal average consensus values of each robot"""
         avg_lines = None
-
-        # # Don't animate the average position when using the protocol from [1]
-        # if self.formation != FormationType.GOAL:
-        #     plt.subplot(self.plot_start + 2)
-        #     avg_lines = []
-        #     x_coords = self.centres[:, :, 0]
-        #     y_coords = self.centres[:, :, 1]
-            
-        #     for id, colour in enumerate(COLOURS):
-        #         # Create lines with no points to be used for the animation 
-        #         avg_lines.extend(plt.plot([], [], colour, linewidth=1))
-                
-        #         # Plot a complete, thin version of the 
-        #         # trajectories to be animated
-        #         plt.plot(x_coords[:, id], y_coords[:, id], 
-        #             colour + ":", linewidth=0.4)
-                
-        #         # Plot markers for start, actual end and 
-        #         # desired end points respectively
-        #         plt.plot(x_coords[0, id], y_coords[0, id], 
-        #             colour + "o", ls='', ms=4)
-                
-        #         plt.plot(x_coords[-1, id], y_coords[-1, id], 
-        #             colour + "s", ls='', ms=4)
-                
-        #     # By definition of consensus, there is only one goal
-        #     plt.plot(self.goal_avg[0], self.goal_avg[1], "k*", ls='', ms=4)
-            
-        #     plt.title("Average Consensus Trajectories")
-        #     plt.xlabel("x (m)", fontsize='large')
-        #     plt.ylabel("y (m)", fontsize='large')
-        
-        #     # Calculate limits
-        #     xlims, ylims = get_bounding_box((self.goal, self.centres[0], self.centres[-1]))
-        #     plt.xlim(xlims)
-        #     plt.ylim(ylims)
-        #     plt.grid(True, linewidth=0.15)
         
         """Plot velocity"""
         plt.subplot(self.plot_start + n_cols + 1)
@@ -566,29 +533,16 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         plt.grid(True, lw=0.15)
         
         """Legend"""
-        # if self.formation == FormationType.GOAL:
-        ax[1, 1].legend(
-            labels          = labels,
-            handles         = handles,
-            loc             = 'upper left', 
-            borderpad       = 0.2,
-            ncol            = 1,
-            title           = "Legend",
-            #title_fontsize  = 'large',
-            bbox_to_anchor   = (1, 1.4)
-        )
-        # else:
-        #     plt.axis('off')
-        #     ax[0, 2].legend(
-        #         labels          = labels,
-        #         handles         = handles,
-        #         loc             = 'center', 
-        #         borderpad       = 2,
-        #         ncol            = 2,
-        #         title           = "Legend",
-        #         title_fontsize  = 'large'
-        #     )
-        #     plt.tight_layout()
+        if legend:
+            ax[1, 1].legend(
+                labels          = labels,
+                handles         = handles,
+                loc             = 'upper left', 
+                borderpad       = 0.2,
+                ncol            = 1,
+                title           = "Legend",
+                bbox_to_anchor   = (1, 1.4)
+            )
         
         # Last element of rect allows enough space for suptitle
         #plt.tight_layout(h_pad=-5, rect=(0, 0, 1.01, 0.95))

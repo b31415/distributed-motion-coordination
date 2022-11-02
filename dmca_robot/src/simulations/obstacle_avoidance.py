@@ -40,7 +40,10 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         Args:
             obstacle_centres (np.ndarray: shape = n_obstacles x 2): List of
                 obstacle centre positions in cartesian coordinates.
-            safety_distance (Optional[np.ndarray]: shape = n_obstacles): The minimum
+            obstacle_radii (np.ndarray: shape = n_obstacles): List of radii
+                describing the max distance from the centre of an obstacle to
+                the edge of that obstacle, for each obstacle.
+            safety_distance (Optional[float]): The minimum
                 distance that the centroid of the formation should come within
                 the edge of an obstacle. Default: Max radius of the desired formation.
             heading_weights (np.ndarray: shape = n_robots): Array of
@@ -88,8 +91,10 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         H = np.array([wl_max, wr_max, -wl_min, -wr_min])
         _, desired_interdistances = self.formation_keeping(initial_positions)
         
+        # Use the radius of the formation as the safety distance
         if safety_distance is None:
-            safety_distance = max(norm(goal_positions.T - goal_centre, axis=1))
+            safety_distance = max(norm(goal_positions - goal_centre, axis=1))
+            
         # Assign constants
         # TODO: Tune control gains (lambda)
         self.a = heading_weights
@@ -103,7 +108,12 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         self.pd = goal_centre
         self.theta_d = goal_heading
         self.pot = obstacle_centres
-        self.dst = safety_distance
+        # Safe distance from the centre of an obstacle
+        self.dst = safety_distance + obstacle_radii
+        self.obstacle_radii = obstacle_radii
+        
+        self.problem1_warm_start = np.zeros((8,))
+        self.problem2_warm_start = np.zeros((8,))
         
         
     def B(self, theta):
@@ -155,10 +165,12 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         """
         x = positions[:, 0]
         y = positions[:, 1]
+        # Sums in the denominator and numerator, respectively, in
+        # equation (13) in [1].
         x_sum = np.dot(x, self.a - 1/self.n_robots)
         y_sum = np.dot(y, self.a - 1/self.n_robots)
         
-        theta_c = arctan2(x_sum, y_sum)
+        theta_c = arctan2(y_sum, x_sum)
         
         # Calculate the first two rows of Jn in equation (14)
         # in [1] and set the third row to zeros
@@ -172,7 +184,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         # Fill in the values for the third row of Jn
         for j in range(self.n_robots):
             mxj, myj = m(j)
-            Jn[-1, 2*j:2*(j + 1)] = (-mxj, myj)
+            Jn[-1, 2*j:2*(j + 1)] = (-myj, mxj)
          
         return theta_c, Jn
     
@@ -180,18 +192,25 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         """
         Calculates variables defined in section 2D of [1].
         Args:
-            positions (np.ndarray: shape = n_robots x 2):
-                Current positions of all robots.
             pc (np.ndarray: shape = 2): Centroid of the robot positions.
+        Returns:
+            dot (np.ndarray: shape = n_obstacles x 2): For simplicity, each
+                obstacle is considered to be bounded by a circle. So, dot and
+                dst are the actual and desired minimum distances of the
+                the centre of the formation to the centre of each obstacle rather
+                than the edge of the obstacle use in equation (17) in [1].
+            Jot (np.ndarray: shape = n_obstacles x (2*n_robots))
         """
         pc = np.expand_dims(pc, axis=0)
+        # Equation (17) in [1]:
         diff = pc - self.pot
         dot = norm(diff, axis=1)
         
         # Equation 19 in [1]: ((pc - po)^T / (n dot)) x (I2, I2, ...)
-        # diff has shape Mx2, so make dot have the same
+        # diff has shape n_obstacles x 2, so make dot have the same
         # shape for element-wise division
         expanded_dot = np.tile(np.expand_dims(dot, 1), (1, 2))
+        # Calculate the (pc - po)^T / 4dot part of equation (19) in [1]
         left_term = diff / (self.n_robots * expanded_dot)
         Jot = np.matmul(left_term, np.tile(np.eye(2), (1, self.n_robots)))
         return dot, Jot
@@ -224,7 +243,10 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         # Au = b [2]
         R = np.matmul(Jf, Jx)
         s = self.lambda_f * (self.df_d - df)
-        uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim, solver='cvxopt')
+        uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim,
+            solver='osqp', initvals=self.problem1_warm_start)
+        self.problem1_warm_start = uf
+        
         """Solve S2 level 2 from table 1 in [1]"""
         rank = np.linalg.matrix_rank(R)
         # Remove redundant rows (i.e. no redundant equality constraints) to
@@ -245,8 +267,13 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             self.lambda_ot * (dot - self.dst),
             self.omega_lim
         ), axis = 0)
-        #un = solve_ls(R, s, G, h, A=A, b=b, solver='cvxopt')
-        un = solve_ls(R, s, G, h, solver='cvxopt')
+        # G = self.Jlim
+        # h = self.omega_lim
+        P = np.matmul(R.T, R)
+        #print("Rank = {}".format(np.linalg.matrix_rank(np.concatenate((P, A.T, G.T), axis=1))))
+        un = solve_ls(R, s, G=G, h=h, A=A, b=b,
+            solver='osqp', initvals=self.problem2_warm_start)
+        self.problem2_warm_start = un
         # Convert control velocity to position and cartesian velocity
         control_vel = un.reshape((self.n_robots, 2))
         new_heading = curr_heading + self.dynamics_time_step * control_vel[:, 1]
@@ -254,25 +281,57 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         new_pos = curr_pos + self.dynamics_time_step * new_vel
         
         goal_error = np.array([norm(pc - self.pd), norm(theta_c - self.theta_d)])
-        return new_pos, new_vel, goal_error, df
+        # Use error in millimetres
+        interdistance_error = 1e3 * np.abs(self.df_d - df)
+        return new_pos, new_vel, goal_error, interdistance_error
         
     def setup_plot(self, *args):
+        """
+        Start with the MultiRobotGoalSeeker plot and make adjustments
+        specific for this simulation as necessary.
+        """
         times, positions = args[:2]
-        super().setup_plot(*args)
+        super().setup_plot(legend=False, *args)
+        plt.suptitle("Avoiding Obstacles Whilst Maintaining Formation")
         
         # Add obstacles to the trajectory plot
         plt.subplot(221)
-        radius = self.dst
-        for centre in zip(self.pot, self:
-            obstacle = circle_points(centre, radius)
-            safety_boundary = circle_points(centre, radius)
-            plt.plot(obstacle[:, 0], obstacle[:, 1], 'g', lw=1)
-            plt.plot(safety_boundary[:, 0], safety_boundary[:, 1], 'k..', lw=0.3)
-            
+        for centre, obstacle_radius, safety_radius in zip(self.pot, self.obstacle_radii, self.dst):
+            obstacle = circle_points(centre, obstacle_radius)
+            safety_boundary = circle_points(centre, safety_radius)
+            plt.plot(obstacle[:, 0], obstacle[:, 1], 'g', lw=0.5)
+            plt.plot(safety_boundary[:, 0], safety_boundary[:, 1], 'k:', lw=0.3)
+        
+        # Plot the trajectory of the centroid of the robots
         centroid = np.mean(positions, axis=1)
-        plt.plot(centroid[:, 0], centroid[:, 1], 'k--', lw=0.5) 
+        plt.plot(centroid[:, 0], centroid[:, 1], 'k--', lw=0.5)
+        
+        handles, _ = plt.get_legend_handle_lables()
+        trajectory_legend = [r"$\mathbf{{x}}_{}$".format(robot + 1) for robot in range(self.n_robots)]
+        trajectory_legend.extend([r"\mathbf{{x}}_c", "start", "end", "goal", "obstacle", "safety margin"])
+        # Trajectory handles
+        filtered_handles = [handles[5*i] for i in range(self.n_robots)]
+        # Centroid handle
+        filtered_handles.append(handles[-1])
+        # Start, end and goal handles
+        filtered_handles.extend(handles[2:6])
+        # Obstacle handles
+        plt.legend(trajectory_legend[-3:-1])
+        
         plt.subplot(222)
-        plt.ylabel("Interdistances", fontsize='large')
+        plt.title("Interdistance Errors")
+        plt.ylabel("Distance (mm)")
+        plt.legend([r"$d_{{{:d}{:d}}}$".format(i + 1, j + 1) for i, j in self.pairs])
+        time_lims = [0, self.simulation_time]
+        plt.xlim(time_lims)
+        
+        plt.subplot(223)
+        plt.xlim(time_lims)
+        
+        plt.subplot(224)
+        plt.xlim(time_lims)
+        
+        plt.tight_layout()
         
 if __name__ == "__main__":
 
@@ -287,13 +346,15 @@ if __name__ == "__main__":
         initial_positions = initial_positions,
         goal_centre = np.array([4, 4]),
         goal_heading = pi/2,
-        obstacle_centres = np.array([[2, 1.5], [2, 4]]),
-        obstacle_radii = np.array([[0.5, 1]]),
+        obstacle_centres = np.array([[2, 1.5], [1, 5]]),
+        safety_distance = 0.1 + 1/sqrt(2),
+        obstacle_radii = np.array([0.5, 0.7]),
         max_control_velocity = np.array([0.1, 1]),
         distance_between_wheels = 0.35,
         wheel_radius = 0.1,
         heading_weights = np.array([0.5, 0.5, 0, 0]),
-        dynamics_time_step = 1e-1
+        simulation_time = 30,
+        dynamics_time_step = 0.1
     )
     
     start_time = perf_counter()
