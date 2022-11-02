@@ -353,17 +353,20 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     def get_simulation_value_names(self):
         return ["positions", "velocities", "goal errors", "formation errors"]
 
-    def step_simulation(self, curr_pos, curr_vel):
+    def step_simulation(self, curr_pos, curr_vel, *_):
         """
         Calculates one time-step of the simulation.
         Args:
             curr_pos: Current robot positions
             curr_vel: Current robot velocities
+            *_: Ignore extra arguments for compatibility
+                with super().step_simulation()
         Returns:
             (position, velocity, goal_error, formation_errors)
         """
         new_positions = np.zeros((self.n_robots, 2))
         new_velocities = np.zeros((self.n_robots, 2))
+        new_accelerations = np.zeros((self.n_robots, 2))
         new_goal_errors = np.zeros((self.n_robots, 2))
         new_formation_errors = np.zeros((self.n_robots, 3, 2))
         
@@ -375,6 +378,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             ge, fe, total_error = self.objective_function(i, curr_pos, curr_vel)
             new_goal_errors[i] = ge
             new_formation_errors[i] = fe
+            new_accelerations[i] = total_error
             
             # Saturate the velocity to simulate the maximum speed of the robot
             new_velocities[i] = np.clip(
@@ -384,7 +388,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             
             # new_centres[i] = self.get_new_centre(i, delta_pos)
         
-        return new_positions, new_velocities, new_goal_errors, new_formation_errors
+        return new_positions, new_velocities, new_accelerations, new_goal_errors, new_formation_errors
     
     def run_simulation(self, initial_positions, *args):
         """
@@ -399,6 +403,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             control_velocities
             positions
             velocities
+            accelerations
             goal_errors
             formation_errors
         """
@@ -412,13 +417,17 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         positions,
         velocities,
         goal_errors,
-        formation_errors
+        formation_errors,
+        legend = True
     ):
         """
         Draw plot except for the animation.
+        Args:
+            legend (boolean): If True use a common legend for all plots.
+                Use False to manually draw a legend after calling this function.
         """
         # Setup
-        n_cols = 2# if self.formation == FormationType.GOAL else 3
+        n_cols = 2
         _, ax = plt.subplots(2, n_cols, figsize=(4*n_cols, 8)) 
             
         plt.suptitle(self.sup_title, fontsize='x-large')
@@ -471,43 +480,6 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         
         """Plot the internal average consensus values of each robot"""
         avg_lines = None
-
-        # # Don't animate the average position when using the protocol from [1]
-        # if self.formation != FormationType.GOAL:
-        #     plt.subplot(self.plot_start + 2)
-        #     avg_lines = []
-        #     x_coords = self.centres[:, :, 0]
-        #     y_coords = self.centres[:, :, 1]
-            
-        #     for id, colour in enumerate(COLOURS):
-        #         # Create lines with no points to be used for the animation 
-        #         avg_lines.extend(plt.plot([], [], colour, linewidth=1))
-                
-        #         # Plot a complete, thin version of the 
-        #         # trajectories to be animated
-        #         plt.plot(x_coords[:, id], y_coords[:, id], 
-        #             colour + ":", linewidth=0.4)
-                
-        #         # Plot markers for start, actual end and 
-        #         # desired end points respectively
-        #         plt.plot(x_coords[0, id], y_coords[0, id], 
-        #             colour + "o", ls='', ms=4)
-                
-        #         plt.plot(x_coords[-1, id], y_coords[-1, id], 
-        #             colour + "s", ls='', ms=4)
-                
-        #     # By definition of consensus, there is only one goal
-        #     plt.plot(self.goal_avg[0], self.goal_avg[1], "k*", ls='', ms=4)
-            
-        #     plt.title("Average Consensus Trajectories")
-        #     plt.xlabel("x (m)", fontsize='large')
-        #     plt.ylabel("y (m)", fontsize='large')
-        
-        #     # Calculate limits
-        #     xlims, ylims = get_bounding_box((self.goal, self.centres[0], self.centres[-1]))
-        #     plt.xlim(xlims)
-        #     plt.ylim(ylims)
-        #     plt.grid(True, linewidth=0.15)
         
         """Plot velocity"""
         plt.subplot(self.plot_start + n_cols + 1)
@@ -523,10 +495,12 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         """Error plots"""
         plt.subplot(self.plot_start + n_cols + 2)
         plt.title("Total Goal Error")
-        for id, colour in enumerate(COLOURS):
-            plt.plot(times, np.linalg.norm(goal_errors[:, id], axis=1), 
-                colour, lw=1)
-            
+        if len(goal_errors.shape) == 3:
+            for id, colour in enumerate(COLOURS):
+                plt.plot(times, np.linalg.norm(goal_errors[:, id], axis=1), 
+                    colour, lw=1)
+        else:
+            plt.plot(times, np.linalg.norm(goal_errors, axis=1), lw=1)
         plt.xlabel("Time (s)", fontsize='large')
         plt.ylabel("Norm of goal error", fontsize='large')
         plt.grid(True, lw=0.15)  
@@ -534,11 +508,18 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         # Different formation error plot for goal 
         # vs other formation error terms
         if self.formation == FormationType.GOAL:
-            formation_err_norm = np.linalg.norm(formation_errors[:, :, 0, :], axis=2)
+            if len(formation_errors.shape) == 4:
+                formation_err_norm = np.linalg.norm(formation_errors[:, :, 0, :], axis=2)
+
             plt.subplot(self.plot_start + 2)
             plt.title("Formation Error")
-            for id, colour in enumerate(COLOURS):
-                plt.plot(times, formation_err_norm[:, id], colour, lw=1)
+            if len(formation_errors.shape) == 3:
+                for id, colour in enumerate(COLOURS):
+                    plt.plot(times, formation_err_norm[:, id], colour, lw=1)
+            else:
+                for i in range(formation_errors.shape[1]):
+                    plt.plot(times, formation_errors[:, i], lw=1)
+                    
             plt.ylabel("Norm of formation error", fontsize='large')
             plt.ylim(ymin=0)
         else:
@@ -555,29 +536,16 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         plt.grid(True, lw=0.15)
         
         """Legend"""
-        # if self.formation == FormationType.GOAL:
-        ax[1, 1].legend(
-            labels          = labels,
-            handles         = handles,
-            loc             = 'upper left', 
-            borderpad       = 0.2,
-            ncol            = 1,
-            title           = "Legend",
-            #title_fontsize  = 'large',
-            bbox_to_anchor   = (1, 1.4)
-        )
-        # else:
-        #     plt.axis('off')
-        #     ax[0, 2].legend(
-        #         labels          = labels,
-        #         handles         = handles,
-        #         loc             = 'center', 
-        #         borderpad       = 2,
-        #         ncol            = 2,
-        #         title           = "Legend",
-        #         title_fontsize  = 'large'
-        #     )
-        #     plt.tight_layout()
+        if legend:
+            ax[1, 1].legend(
+                labels          = labels,
+                handles         = handles,
+                loc             = 'upper left', 
+                borderpad       = 0.2,
+                ncol            = 1,
+                title           = "Legend",
+                bbox_to_anchor   = (1, 1.4)
+            )
         
         # Last element of rect allows enough space for suptitle
         #plt.tight_layout(h_pad=-5, rect=(0, 0, 1.01, 0.95))
@@ -613,11 +581,14 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
     
 if __name__ == "__main__":
     
-    test_case = "reproduce paper"
-    initial_formation = Formation((0, 0), 0, 1)
-    n_robots = 4
+    test_case = "custom"
+
+    n_robots = 2
     
-    if test_case == "ellipse":
+    if test_case == "custom":
+        initial_formation = np.array([[0, 0], [0, -2]])
+        goal_formation = np.array([[5, 0], [1, 2]])
+    elif test_case == "ellipse":
         goal_formation = Formation((0, 0), 0, 0.75, 1.5)
     elif test_case == "rotate on spot":
         goal_formation = Formation((0, 0), np.pi/2, 1)
@@ -638,10 +609,11 @@ if __name__ == "__main__":
         graph_id = graph_id,
         dynamics_time_step = 0.1
     )
-    sim_results = sim.run_simulation(initial_positions=initial_formation)
+    times, _, _, positions, velocities, _, goal_errors, formation_errors = \
+        sim.run_simulation(initial_positions=initial_formation)
     
     # Set up data for animation
-    lines, avg_lines = sim.setup_plot(sim_results[0], *sim_results[3:])
+    lines, avg_lines = sim.setup_plot(times, positions, velocities, goal_errors, formation_errors)
     if avg_lines:
         lines.extend(avg_lines)
     # data = np.concatenate((positions, sim.centres), axis=1)
