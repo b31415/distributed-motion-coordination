@@ -150,10 +150,10 @@ class GeneralSimulationHelper(object):
         
         # Calculate desired values
         for i in range(1, n_times):
-            pos, vel, acc, *_ = self.step_simulation(desired_positions[i - 1], desired_velocities[i - 1])[:2]
-            desired_positions[i] = pos
-            desired_velocities[i] = vel
-            desired_accelerations[i] = acc
+            simulation_values = self.step_simulation(desired_positions[i - 1], desired_velocities[i - 1])[:2]
+            desired_positions[i] = simulation_values[0]
+            desired_velocities[i] = simulation_values[1]
+            desired_accelerations[i] = simulation_values[2]
         
         n_times = desired_positions.shape[0]
         control_velocities = np.zeros((n_times, 2))

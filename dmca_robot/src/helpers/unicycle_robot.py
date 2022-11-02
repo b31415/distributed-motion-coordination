@@ -1,5 +1,5 @@
 from time import time
-from math import pi
+from math import pi, cos, sin
 from helpers.lab_helpers import rotation_matrix
 
 import rospy
@@ -20,6 +20,7 @@ class UnicycleRobot:
         coordinate_offset = np.array((0.0, 0.0)),
         init = True,
         motion_capture = True,
+        mocap_offset = 0
     ):
         """
         Notes:
@@ -47,11 +48,15 @@ class UnicycleRobot:
                 in the map coordinate system instead of manually translating
                 coordinates into the frame where the master's initial position
                 represents the origin. 
+            mocap_offset (float): Distance in the direction of the heading to
+                offset the position by to transform from the motion capture
+                position to the position of the (rotation axis of the) robot.
         """
         self.name = name
         self.L = 0.5
 
         self.motion_capture = motion_capture
+        self.mocap_offset = mocap_offset
 
         if not self.motion_capture:
             # The inital position of the master is defined as (0, 0),
@@ -178,6 +183,7 @@ class UnicycleRobot:
 
         pose = pose_msg.pose
         heading, position = extract_pose_info(pose)
+        position += self.mocap_offset * np.array([cos(heading), sin(heading)])
 
         rospy.logdebug("Received {}'s state:\n"
             "\theading: {:.1f} degrees\n"
@@ -245,13 +251,7 @@ class UnicycleRobot:
         )
         self.append_new_state(heading, position, control_velocity)
 
-    def get_current_offaxis_state(self):
-        """
-        Returns:
-            (float): The most recently measured heading angle.
-            (np.ndarray): Most recent off-axis position.
-            (np.ndarray): Most recent velocities in the form (xdot_tilde, ydot_tilde).
-        """
+    def get_offaxis_state_at_index(self, index):
         # Wait until the latest state has been measured
         while (self.control_velocities.shape[0] <= self.msgs_processed) or \
                 (self.offaxis_positions.shape[0] <= self.msgs_processed):
@@ -264,9 +264,9 @@ class UnicycleRobot:
         #     )
         # )
 
-        heading = self.headings[-1]
-        offaxis_pos = self.offaxis_positions[-1]
-        control_vel = self.control_velocities[-1]
+        heading = self.headings[index]
+        offaxis_pos = self.offaxis_positions[index]
+        control_vel = self.control_velocities[index]
         offaxis_vel = to_cartesian_velocity(heading, control_vel, self.L)
         
         rospy.loginfo("Got {}'s current offaxis state:\n"
@@ -282,6 +282,24 @@ class UnicycleRobot:
             )
         )
         return heading, offaxis_pos, offaxis_vel
+
+    def get_initial_offaxis_state(self):
+        """
+        Returns:
+            (float): Initial heading angle.
+            (np.ndarray): Initial off-axis position.
+            (np.ndarray): Initial velocities in the form (xdot_tilde, ydot_tilde).
+        """        
+        return self.get_offaxis_state_at_index(0)
+
+    def get_current_offaxis_state(self):
+        """
+        Returns:
+            (float): The most recently measured heading angle.
+            (np.ndarray): Most recent off-axis position.
+            (np.ndarray): Most recent velocities in the form (xdot_tilde, ydot_tilde).
+        """
+        return self.get_offaxis_state_at_index(-1)
 
     def append_new_state(self, heading=None, offaxis_position=None, control_velocity=None):
         """

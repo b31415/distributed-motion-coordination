@@ -3,7 +3,7 @@
 References:
     [1] TODO
     
-    [2] S. Caron, “Least squares,” scaron.info. https://scaron.info/doc/
+    [2] S. Caron, "Least squares," scaron.info. https://scaron.info/doc/
         qpsolvers/least-squares.html#qpsolvers.solve_ls (accessed Oct. 23, 2022).
 
 """
@@ -343,6 +343,7 @@ if __name__ == "__main__":
     ])
     simulator = ObstacleAvoider(
         n_robots = 4,
+        initial_headings = np.array([0, 0, 0, 0]),
         initial_positions = initial_positions,
         goal_centre = np.array([4, 4]),
         goal_heading = pi/2,

@@ -12,6 +12,7 @@ from time import time
 from datetime import datetime
 import importlib
 import json
+import traceback
 
 import rospy
 import numpy as np
@@ -31,29 +32,41 @@ class RosMaster:
         try:
             ConfigClass = getattr(importlib.import_module(config_module), "Config")
             config = ConfigClass()
-        except Exception:
-            print("Config file {} not found".format(config_module))
+        except Exception as e:
+            print("Config module {} not found".format(config_module))
+            traceback.print_exc()
             exit()
     
         self.names = config.get_node_names()
-        self.simulator = config.get_simulator()
-        
+        mocap_offsets = config.get_mocap_offsets()
+
         self.n_robots = len(self.names)
         self.robots = []
-        max_control_velocity = np.array((0.1, 1)) # (m/s, rad/s)
-        
+        max_control_velocity = config.get_max_control_velocity()
+        print("MAX CONTROL VELOCITY = {}".format(max_control_velocity))
         rospy.init_node(master_name, anonymous=True, log_level=rospy.DEBUG)
 
-        for _, name in enumerate(self.names):
+        for i, name in enumerate(self.names):
             self.robots.append(
                 UnicycleRobot(
                     name = name,
                     log_level = rospy.INFO,
                     max_control_velocity = max_control_velocity,
-                    init = False
+                    init = False,
+                    mocap_offset = mocap_offsets[i]
                 )
             )
         
+        self.initial_headings = np.zeros((self.n_robots,))
+        self.initial_positions = np.zeros((self.n_robots, 2))
+
+        for i, robot in enumerate(self.robots):
+            heading, pos, _ = robot.get_initial_offaxis_state()
+            self.initial_headings[i] = heading
+            self.initial_positions[i] = pos
+        
+        self.simulator = config.get_simulator(self.initial_headings, self.initial_positions)
+
     def run(self):
         """
         Args:
@@ -119,6 +132,10 @@ class RosMaster:
         self.simulator.setup_plot(times, *state_values)
 
         #plt.tight_layout()
+        print("Initial state\n")
+        print("\theadings: {}".format(self.initial_headings))
+        print("\tpositions: {}".format(self.initial_positions))
+        
         plt.savefig("{}/robot.png".format(dir), dpi=300)
         plt.savefig("{}/robot.pdf".format(dir))
         print("Saved figure")
@@ -170,7 +187,8 @@ class RosMaster:
             json.dump(states, file, indent=4)
         
 if __name__ == "__main__":
-    config_module = "multi_robot_config"
+    #config_module = "multi_robot_config"
+    config_module = "obstacle_config"
     master = RosMaster(config_module)
     master.run()
     

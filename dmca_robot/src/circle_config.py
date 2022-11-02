@@ -5,8 +5,7 @@ class Config():
     def __init__(self):
         super(Config, self).__init__(
             node_names        = ["donnie"],
-            headings          = [0],
-            initial_positions = np.array([[0, 0]])
+            headings          = [0]
         )
 
         # Desired goal relative to the inital position.
@@ -19,7 +18,7 @@ class Config():
 
         self.r = 1
 
-    def get_simulator():
+    def get_simulator(self, *args):
         return CircleSimulator(
             goal_centre = Config.goal_centre,
             r = Config.r,

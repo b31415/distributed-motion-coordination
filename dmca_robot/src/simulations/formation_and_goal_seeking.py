@@ -276,7 +276,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         # The measured positions may have some unknown offset due to the 
         # motion capture points not being placed directly on the rotation axis,
         # so stop once some threshold is reach.
-        goto_goal = goto_goal if np.linalg.norm(goto_goal) > 0.2 else 0*goto_goal
+        goto_goal = goto_goal if np.linalg.norm(goto_goal) > 0.1 else 0*goto_goal
         stop_when_goal_reached = -self.A * self.gamma * curr_vel[i]
         
         return goto_goal + stop_when_goal_reached
@@ -508,14 +508,16 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         # Different formation error plot for goal 
         # vs other formation error terms
         if self.formation == FormationType.GOAL:
-            if len(formation_errors.shape) == 4:
-                formation_err_norm = np.linalg.norm(formation_errors[:, :, 0, :], axis=2)
-
             plt.subplot(self.plot_start + 2)
             plt.title("Formation Error")
-            if len(formation_errors.shape) == 3:
+
+            # Multi-robot/second order consensus formation errors
+            if formation_errors.shape[1] == self.n_robots and formation_errors.shape[2] == 2:
+                formation_err_norm = np.linalg.norm(formation_errors, axis=2)
                 for id, colour in enumerate(COLOURS):
                     plt.plot(times, formation_err_norm[:, id], colour, lw=1)
+
+            # Other formation errors (e.g. for obstacle avoidance)
             else:
                 for i in range(formation_errors.shape[1]):
                     plt.plot(times, formation_errors[:, i], lw=1)
