@@ -85,6 +85,7 @@ class RosMaster:
         samples_handled = 0
         curr_pos = np.zeros((self.n_robots, 2))
         curr_vel = np.zeros((self.n_robots, 2))
+        curr_heading = np.zeros((self.n_robots))
 
         while not rospy.is_shutdown():
             samples_recorded = min([len(robot.headings) for robot in self.robots])
@@ -93,15 +94,17 @@ class RosMaster:
 
                 # Get the current state of each robot
                 for i, robot in enumerate(self.robots):
-                    _, pos, vel = robot.get_current_offaxis_state()
-                    print("Current {} pos {}, vel {}".format(robot.name, pos, vel))
+                    heading, pos, vel = robot.get_current_offaxis_state()
+                    print("Current {} pos {}, vel {}, heading {}".format(
+                        robot.name, pos, vel, heading))
                     curr_pos[i] = pos
                     curr_vel[i] = vel
+                    curr_heading[i] = heading
 
                 # Calculate the next state
-                new_state = self.simulator.step_simulation(curr_pos, curr_vel)
+                new_state = self.simulator.step_simulation(curr_pos, curr_vel, curr_heading)
                 new_pos, new_vel = new_state[:2]
-                print("Simulated donnie pos {}, vel {}".format(new_pos[0], new_vel[0]))
+
                 # Save state
                 states = self.append_state(states, new_state)
 
@@ -132,7 +135,7 @@ class RosMaster:
         self.simulator.setup_plot(times, *state_values)
 
         #plt.tight_layout()
-        print("Initial state\n")
+        print("Initial states were:\n")
         print("\theadings: {}".format(self.initial_headings))
         print("\tpositions: {}".format(self.initial_positions))
         

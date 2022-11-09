@@ -66,10 +66,11 @@ class GeneralSimulationHelper(object):
         """
         pass
     
-    def run_simulation(self, initial_positions, max_control_velocity=None):
+    def run_simulation(self, initial_positions, initial_headings=None, max_control_velocity=None):
         """
         Args:
             initial_positions (Iterable)
+            initial_headings (Iterable): Default is an array of zeros
             max_control_velocity (Optional[Iterable]: length = 2): In the
                 form (v, omega). If None, the control velocity won't be
                 saturated (clipping may still be applied before converting
@@ -94,7 +95,11 @@ class GeneralSimulationHelper(object):
         multi_robot = (len(initial_positions.shape) == 2)
         if multi_robot:
             n_robots = initial_positions.shape[0]
-        curr_heading = np.zeros(n_robots) if multi_robot else 0
+        if initial_headings is None:
+            curr_heading = np.zeros(n_robots) if multi_robot else 0
+        else:
+            curr_heading = np.array(initial_headings)
+        
         curr_pos = initial_positions
         curr_control_vel = np.zeros_like(initial_positions)
         

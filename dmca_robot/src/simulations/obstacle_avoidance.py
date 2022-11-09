@@ -12,7 +12,7 @@ from numpy import pi, cos, sin, arctan2, sqrt
 from numpy.linalg import norm
 from qpsolvers import solve_ls, solve_qp # pip install qpsolvers[all_pypi_solvers]
 import matplotlib.pyplot as plt
-from time import perf_counter
+#from time import perf_counter
 
 from helpers.circle_simulation_helpers import circle_points
 from helpers.lab_helpers import to_cartesian_velocity, rotation_matrix
@@ -21,6 +21,7 @@ from simulations.formation_and_goal_seeking import MultiRobotGoalSeeker
 class ObstacleAvoider(MultiRobotGoalSeeker):
     def __init__(self,
             n_robots,
+            initial_headings,
             initial_positions,
             goal_centre,
             goal_heading,
@@ -56,7 +57,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         goal_positions = initial_positions - np.mean(initial_positions, axis=0)
         goal_positions = np.matmul(rotation_matrix(goal_heading), goal_positions.T).T
         goal_positions += goal_centre
-        super().__init__(n_robots, goal_positions, **sim_args)
+        super(ObstacleAvoider, self).__init__(n_robots, goal_positions, **sim_args)
         
         # Calculate the number of distinct unordered pairs of robots
         # n choose 2 = 1 + 2 + ... + n - 1 = n(n - 1)/2
@@ -97,6 +98,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             
         # Assign constants
         # TODO: Tune control gains (lambda)
+        self.solver = 'quadprog'
         self.a = heading_weights
         self.lambda_f = 1
         self.df_d = desired_interdistances
@@ -244,7 +246,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         R = np.matmul(Jf, Jx)
         s = self.lambda_f * (self.df_d - df)
         uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim,
-            solver='osqp', initvals=self.problem1_warm_start)
+            solver=self.solver, initvals=self.problem1_warm_start)
         self.problem1_warm_start = uf
         
         """Solve S2 level 2 from table 1 in [1]"""
@@ -272,7 +274,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         P = np.matmul(R.T, R)
         #print("Rank = {}".format(np.linalg.matrix_rank(np.concatenate((P, A.T, G.T), axis=1))))
         un = solve_ls(R, s, G=G, h=h, A=A, b=b,
-            solver='osqp', initvals=self.problem2_warm_start)
+            solver=self.solver, initvals=self.problem2_warm_start)
         self.problem2_warm_start = un
         # Convert control velocity to position and cartesian velocity
         control_vel = un.reshape((self.n_robots, 2))
@@ -348,24 +350,24 @@ if __name__ == "__main__":
         goal_centre = np.array([4, 4]),
         goal_heading = pi/2,
         obstacle_centres = np.array([[2, 1.5], [1, 5]]),
-        safety_distance = 0.1 + 1/sqrt(2),
         obstacle_radii = np.array([0.5, 0.7]),
         max_control_velocity = np.array([0.1, 1]),
         distance_between_wheels = 0.35,
         wheel_radius = 0.1,
         heading_weights = np.array([0.5, 0.5, 0, 0]),
+        safety_distance = 0.1 + 1/sqrt(2),
         simulation_time = 30,
         dynamics_time_step = 0.1
     )
     
-    start_time = perf_counter()
+    #start_time = perf_counter()
     # Don't need to set max control velocity for run_simulation is it
     # is handled by step_simulation as a constraint in the HQP problem
     times, _, _, positions, velocities, goal_errors, formation_errors = \
-        simulator.run_simulation(initial_positions)
+        simulator.run_simulation(initial_positions, initial_headings)
     
-    duration = perf_counter() - start_time
-    print("Took {:.5f}s for {} time steps ({:.5f} s/s)".format(duration, len(times), duration / simulator.simulation_time))
+    #duration = perf_counter() - start_time
+    #print("Took {:.5f}s for {} time steps ({:.5f} s/s)".format(duration, len(times), duration / simulator.simulation_time))
     
     # Set up data for animation
     simulator.setup_plot(times, positions, velocities, goal_errors, formation_errors)

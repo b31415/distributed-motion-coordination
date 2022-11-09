@@ -390,13 +390,14 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         
         return new_positions, new_velocities, new_accelerations, new_goal_errors, new_formation_errors
     
-    def run_simulation(self, initial_positions, *args):
+    def run_simulation(self, initial_positions, initial_headings, *args):
         """
         Runs step_simulation() repeatedly with unicycle
         dynamics to produce values for plotting.
         
         Args:
             initial_positions (np.ndarray: shape = n_robots x 2 | Formation)
+            initial_headings (np.ndarray: shape = (n_robots,))
         Returns:
             times
             headings
@@ -410,7 +411,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
         if type(initial_positions) == Formation:
             initial_positions = initial_positions.to_positions(self.n_robots)
             
-        return super().run_simulation(initial_positions=initial_positions, *args)
+        return super().run_simulation(initial_positions, initial_headings, *args)
         
     def setup_plot(self,
         times,
@@ -586,7 +587,8 @@ if __name__ == "__main__":
     test_case = "custom"
 
     n_robots = 2
-    
+    initial_headings = np.array([0, 0])
+
     if test_case == "custom":
         initial_formation = np.array([[0, 0], [0, -2]])
         goal_formation = np.array([[5, 0], [1, 2]])
@@ -612,7 +614,7 @@ if __name__ == "__main__":
         dynamics_time_step = 0.1
     )
     times, _, _, positions, velocities, _, goal_errors, formation_errors = \
-        sim.run_simulation(initial_positions=initial_formation)
+        sim.run_simulation(initial_positions=initial_formation, initial_headings=initial_headings)
     
     # Set up data for animation
     lines, avg_lines = sim.setup_plot(times, positions, velocities, goal_errors, formation_errors)

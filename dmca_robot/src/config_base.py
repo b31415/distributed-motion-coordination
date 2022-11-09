@@ -18,11 +18,11 @@ class ConfigBase():
         self.mocap_offsets = [0 for _ in node_names]
         for i, name in enumerate(node_names):
             if name == "donnie":
-                self.mocap_offsets[i] = 0.08
+                self.mocap_offsets[i] = 0.15
             if name == "leonardo":
-                self.mocap_offsets[i] = 0.05
+                self.mocap_offsets[i] = 0.08
             if name == "mikey":
-                self.mocap_offsets[i] = 0.01
+                self.mocap_offsets[i] = 0.08
 
     def get_node_names(self):
         return self.node_names
