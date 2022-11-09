@@ -190,8 +190,8 @@ class RosMaster:
             json.dump(states, file, indent=4)
         
 if __name__ == "__main__":
-    #config_module = "multi_robot_config"
-    config_module = "obstacle_config"
+    config_module = "multi_robot_config"
+    #config_module = "obstacle_config"
     master = RosMaster(config_module)
     master.run()
     

@@ -98,7 +98,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
             
         # Assign constants
         # TODO: Tune control gains (lambda)
-        self.solver = 'quadprog'
+        self.solver = 'osqp'
         self.a = heading_weights
         self.lambda_f = 1
         self.df_d = desired_interdistances
@@ -246,7 +246,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         R = np.matmul(Jf, Jx)
         s = self.lambda_f * (self.df_d - df)
         uf = solve_ls(R, s, G=self.Jlim, h=self.omega_lim,
-            solver=self.solver, initvals=self.problem1_warm_start)
+            solver=self.solver)#, initvals=self.problem1_warm_start)
         self.problem1_warm_start = uf
         
         """Solve S2 level 2 from table 1 in [1]"""
@@ -274,7 +274,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         P = np.matmul(R.T, R)
         #print("Rank = {}".format(np.linalg.matrix_rank(np.concatenate((P, A.T, G.T), axis=1))))
         un = solve_ls(R, s, G=G, h=h, A=A, b=b,
-            solver=self.solver, initvals=self.problem2_warm_start)
+            solver=self.solver)#, initvals=self.problem2_warm_start)
         self.problem2_warm_start = un
         # Convert control velocity to position and cartesian velocity
         control_vel = un.reshape((self.n_robots, 2))
@@ -293,7 +293,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         specific for this simulation as necessary.
         """
         times, positions = args[:2]
-        super().setup_plot(legend=False, *args)
+        super(ObstacleAvoider, self).setup_plot(legend=False, *args)
         plt.suptitle("Avoiding Obstacles Whilst Maintaining Formation")
         
         # Add obstacles to the trajectory plot
@@ -308,9 +308,15 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         centroid = np.mean(positions, axis=1)
         plt.plot(centroid[:, 0], centroid[:, 1], 'k--', lw=0.5)
         
-        handles, _ = plt.get_legend_handle_lables()
+        ax = plt.gca()
+        xlims = ax.get_xlim()
+        ylims = ax.get_ylim()
+        plt.xlim([xlims[0], xlims[1] + 2])
+        plt.ylim([ylims[0] - 1, xlims[1] + 1.01])
+
+        handles = ax.get_lines()
         trajectory_legend = [r"$\mathbf{{x}}_{}$".format(robot + 1) for robot in range(self.n_robots)]
-        trajectory_legend.extend([r"\mathbf{{x}}_c", "start", "end", "goal", "obstacle", "safety margin"])
+        trajectory_legend.extend([r"$\mathbf{{x}}_c$", "start", "end", "goal", "obstacle", "safety margin"])
         # Trajectory handles
         filtered_handles = [handles[5*i] for i in range(self.n_robots)]
         # Centroid handle
@@ -318,7 +324,8 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         # Start, end and goal handles
         filtered_handles.extend(handles[2:6])
         # Obstacle handles
-        plt.legend(trajectory_legend[-3:-1])
+        filtered_handles.extend(handles[-3:-1])
+        plt.legend(filtered_handles, trajectory_legend)
         
         plt.subplot(222)
         plt.title("Interdistance Errors")
@@ -333,7 +340,7 @@ class ObstacleAvoider(MultiRobotGoalSeeker):
         plt.subplot(224)
         plt.xlim(time_lims)
         
-        plt.tight_layout()
+        #plt.tight_layout()
         
 if __name__ == "__main__":
 

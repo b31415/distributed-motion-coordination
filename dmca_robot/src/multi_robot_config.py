@@ -6,13 +6,12 @@ class Config(ConfigBase):
     def __init__(self):
 
         super(Config, self).__init__(
-            node_names = ["mikey", "donnie"]
+            node_names = ["mikey", "leonardo", "donnie"]
         )
 
         self.goal_positions = np.array([
-            #[-1, -2], [0, -1], [1, 0]
-            #[0.25, 0.5]#, [-0.05, 1.75], [1, 1.5]
-            [0, 1], [0, 0]#, [0, -1]
+            #[-0.8, -2.1], [-0.2, -1.5], [0.3, -2.33]
+            [0.25, 0.5], [-0.05, 1.75], [1, 1.5]
         ])
 
     def get_simulator(self, *args):

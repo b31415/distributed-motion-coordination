@@ -513,7 +513,7 @@ class MultiRobotGoalSeeker(GeneralSimulationHelper):
             plt.title("Formation Error")
 
             # Multi-robot/second order consensus formation errors
-            if formation_errors.shape[1] == self.n_robots and formation_errors.shape[2] == 2:
+            if formation_errors.shape[1] == self.n_robots and formation_errors.shape[-1] == 2:
                 formation_err_norm = np.linalg.norm(formation_errors, axis=2)
                 for id, colour in enumerate(COLOURS):
                     plt.plot(times, formation_err_norm[:, id], colour, lw=1)
@@ -617,7 +617,7 @@ if __name__ == "__main__":
         sim.run_simulation(initial_positions=initial_formation, initial_headings=initial_headings)
     
     # Set up data for animation
-    lines, avg_lines = sim.setup_plot(times, positions, velocities, goal_errors, formation_errors)
+    lines, avg_lines, _ = sim.setup_plot(times, positions, velocities, goal_errors, formation_errors)
     if avg_lines:
         lines.extend(avg_lines)
     # data = np.concatenate((positions, sim.centres), axis=1)

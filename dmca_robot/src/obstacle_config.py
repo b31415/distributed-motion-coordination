@@ -8,19 +8,19 @@ class Config(ConfigBase):
 
         super(Config, self).__init__(
             # Needs at least 2 robots
-            node_names = ["mikey", "leonardo"]
+            node_names = ["mikey", "leonardo", "donnie"]
         )
 
         # Use Mikey as the front of the formation
-        self.heading_weights = np.array([0, 1])#[1, 0, 0])
+        self.heading_weights = np.array([0, 1, 0])
 
-        self.goal_centre = np.array([0, -2])
+        self.goal_centre = np.array([0, -1.5])#0.5, 1.5])#
         self.goal_heading = -pi/2
-        self.obstacle_centres = np.array([[0.5, -1]])
-        self.obstacle_radii = np.array([0.5])
+        self.obstacle_centres = np.array([[0, -0.25], [-1, 0.5]])
+        self.obstacle_radii = np.array([0.3, 0.3])
         self.distance_between_wheels = 0.33
         self.wheel_radius = 0.096
-
+        self.safety_distance = 0.7
 
     def get_simulator(self, initial_headings, initial_positions):
         return ObstacleAvoider(
@@ -35,5 +35,6 @@ class Config(ConfigBase):
             distance_between_wheels = self.distance_between_wheels,
             wheel_radius = self.wheel_radius,
             heading_weights = self.heading_weights,
+            safety_distance = self.safety_distance,
             dynamics_time_step = 0.1
         )

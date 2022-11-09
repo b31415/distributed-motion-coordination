@@ -4,7 +4,7 @@ import numpy as np
 class ConfigBase():
     __metaclass__ = ABCMeta
 
-    def __init__(self, node_names, headings = None, max_control_velocity = np.array([0.1, 1])):
+    def __init__(self, node_names, headings = None, max_control_velocity = np.array([0.05, 1])):
         """
         Args:
             headings (list): Angles in radians
